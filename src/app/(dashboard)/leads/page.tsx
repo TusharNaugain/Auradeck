@@ -245,13 +245,14 @@ export default function LeadsPage() {
 
   const leads = leadsQuery.data?.items ?? []
   const visibleLeads = React.useMemo(() => {
-    return leads.filter((lead) => {
+    const items = leadsQuery.data?.items ?? []
+    return items.filter((lead) => {
       if (tab === 'active') return !['CONVERTED', 'LOST', 'DISQUALIFIED'].includes(lead.lifecycleStage)
       if (tab === 'converted') return lead.lifecycleStage === 'CONVERTED'
       if (tab === 'closed') return ['LOST', 'DISQUALIFIED'].includes(lead.lifecycleStage)
       return true
     })
-  }, [leads, tab])
+  }, [leadsQuery.data?.items, tab])
   const sources = leadSource.options
   const allCount = leadsQuery.data?.total ?? 0
   const countByStage = React.useMemo(
