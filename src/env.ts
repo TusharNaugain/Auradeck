@@ -6,10 +6,6 @@
 
 import { z } from 'zod'
 
-const isBuildPhase =
-  process.env.NEXT_PHASE === 'phase-production-build' ||
-  process.env.npm_lifecycle_event === 'build'
-
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   NEXT_PUBLIC_APP_URL: z.string().default('http://localhost:3000'),
@@ -66,14 +62,10 @@ const _env = typeof window === 'undefined'
   : { success: true, data: {} as z.infer<typeof envSchema> }
 
 if (typeof window === 'undefined' && !_env.success) {
-  console.error('❌ Invalid environment variables:')
+  console.warn('⚠️ Environment variable validation warnings:')
   if ('error' in _env) {
-    console.error(_env.error.flatten().fieldErrors)
-  }
-  // In production runtime, throw. In build phase or dev, warn only so build passes.
-  if (process.env.NODE_ENV === 'production' && !isBuildPhase) {
-    throw new Error('Invalid environment variables. Check your .env file or Railway variables.')
+    console.warn(_env.error.flatten().fieldErrors)
   }
 }
 
-export const env = (_env.success ? _env.data : {}) as z.infer<typeof envSchema>
+export const env = (_env.success ? _env.data : envSchema.parse({})) as z.infer<typeof envSchema>

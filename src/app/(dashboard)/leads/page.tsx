@@ -243,7 +243,6 @@ export default function LeadsPage() {
     staleTime: 60_000,
   })
 
-  const leads = leadsQuery.data?.items ?? []
   const visibleLeads = React.useMemo(() => {
     const items = leadsQuery.data?.items ?? []
     return items.filter((lead) => {
