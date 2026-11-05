@@ -17,6 +17,9 @@ const nextConfig = {
     'papaparse',
   ],
   experimental: {
+    // Reduce peak memory during webpack compile & static generation on constrained CI builders
+    cpus: 1,
+    webpackMemoryOptimizations: true,
     optimizePackageImports: [
       'lucide-react',
       'date-fns',

@@ -9,10 +9,13 @@ RUN apt-get update -y && apt-get install -y openssl ca-certificates && rm -rf /v
 COPY package*.json ./
 COPY prisma ./prisma/
 
-RUN npm install
+RUN npm ci
 
 # Copy application source code
 COPY . .
+
+# Cap Node heap so the build fails gracefully instead of being OOM-killed by the container
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 
 # Set build-time defaults so Prisma and Next.js build never crash
 ENV NODE_ENV=production
