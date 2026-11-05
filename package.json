@@ -2,6 +2,9 @@
   "name": "auradeck-crm",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "dev": "next dev --turbo",
     "dev:warm": "node scripts/dev.mjs",
@@ -9,7 +12,7 @@
     "build": "node scripts/build.mjs",
     "start": "next start -H 0.0.0.0",
     "demo": "next build && next start --hostname 127.0.0.1 --port 3100",
-    "lint": "eslint src tests next.config.ts vitest.config.ts",
+    "lint": "eslint src tests next.config.mjs vitest.config.ts",
     "type-check": "tsc --noEmit",
     "test": "vitest",
     "test:e2e": "playwright test",
@@ -81,7 +84,8 @@
     "xlsx": "^0.18.5",
     "zod": "^3.23.8",
     "zustand": "^5.0.1",
-    "prisma": "^5.22.0"
+    "prisma": "^5.22.0",
+    "typescript": "^5.0.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.48.2",
@@ -98,7 +102,6 @@
     "jsdom": "^25.0.1",
     "tsx": "^4.19.2",
     "tw-animate-css": "^1.4.0",
-    "typescript": "^5.0.0",
     "vitest": "^2.1.4"
   }
 }

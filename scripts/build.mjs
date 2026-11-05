@@ -28,3 +28,4 @@ try {
   console.error('Next.js build failed:', err)
   process.exit(1)
 }
+
