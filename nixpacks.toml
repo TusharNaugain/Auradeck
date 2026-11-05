@@ -1,6 +1,0 @@
-[variables]
-NIXPACKS_NODE_VERSION = "20"
-NPM_CONFIG_PRODUCTION = "false"
-
-[phases.install]
-cmds = ["npm ci --include=dev || npm install --include=dev"]
