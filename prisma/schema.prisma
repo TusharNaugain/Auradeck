@@ -1,0 +1,1644 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enums
+enum OrganisationType {
+  AURADESK_INTERNAL
+  CUSTOMER_PRACTICE
+}
+
+enum OrganisationStatus {
+  PROSPECT
+  TRIAL
+  ONBOARDING
+  ACTIVE
+  PAUSED
+  CHURNED
+  ARCHIVED
+}
+
+enum UserStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+}
+
+enum MembershipStatus {
+  PENDING
+  ACTIVE
+  DEACTIVATED
+}
+
+enum ScopeType {
+  OWN
+  ASSIGNED
+  TEAM
+  ORGANISATION
+}
+
+enum TeamType {
+  SALES
+  CSM
+  SUPPORT
+  FINANCE
+  OPERATIONS
+  MANAGEMENT
+}
+
+enum LeadSource {
+  WEBSITE
+  REFERRAL
+  PARTNER
+  CAMPAIGN
+  INBOUND_CALL
+  WHATSAPP
+  SOCIAL
+  EVENT
+  IMPORT
+  OTHER
+}
+
+enum LeadLifecycleStage {
+  NEW
+  CONTACTED
+  QUALIFIED
+  DEMO_BOOKED
+  PROPOSAL_SENT
+  NEGOTIATION
+  CONVERTED
+  LOST
+  DISQUALIFIED
+}
+
+enum ContactType {
+  OWNER
+  DECISION_MAKER
+  ADMIN
+  THERAPIST
+  FINANCE
+  RECEPTIONIST
+  CHAMPION
+  END_USER
+  OTHER
+}
+
+enum OpportunityType {
+  NEW_BUSINESS
+  EXPANSION
+  RENEWAL
+  CROSS_SELL
+  UPSELL
+}
+
+enum OpportunityStage {
+  DISCOVERY
+  QUALIFIED
+  DEMO
+  SOLUTION_FIT
+  PROPOSAL
+  NEGOTIATION
+  VERBAL_COMMIT
+  WON
+  LOST
+}
+
+enum ForecastCategory {
+  PIPELINE
+  BEST_CASE
+  COMMIT
+  CLOSED
+}
+
+enum ActivityType {
+  CALL
+  EMAIL
+  WHATSAPP
+  MEETING
+  DEMO
+  NOTE
+  TASK
+  VISIT
+  SUPPORT_FOLLOWUP
+}
+
+enum ActivityStatus {
+  PLANNED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum ActivityVisibility {
+  PRIVATE
+  TEAM
+  ORGANISATION
+}
+
+enum HealthStatus {
+  HEALTHY
+  WATCH
+  AT_RISK
+  CRITICAL
+  UNKNOWN
+}
+
+enum OnboardingStatus {
+  NOT_STARTED
+  SCHEDULED
+  IN_PROGRESS
+  BLOCKED
+  READY_FOR_GO_LIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum OnboardingTaskStatus {
+  TODO
+  IN_PROGRESS
+  BLOCKED
+  DONE
+  SKIPPED
+}
+
+enum TicketPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum TicketStatus {
+  NEW
+  OPEN
+  PENDING_CUSTOMER
+  PENDING_INTERNAL
+  RESOLVED
+  CLOSED
+}
+
+enum TicketSource {
+  EMAIL
+  PORTAL
+  PHONE
+  WHATSAPP
+  INTERNAL
+}
+
+enum CommentVisibility {
+  INTERNAL
+  CUSTOMER
+}
+
+enum ClientStatus {
+  ENQUIRY
+  ACTIVE
+  INACTIVE
+  DISCHARGED
+  ARCHIVED
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  CONFIRMED
+  CHECKED_IN
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  PAUSED
+  EXPIRED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  PAID
+  PARTIALLY_PAID
+  OVERDUE
+  VOID
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+  PARTIAL_REFUND
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  BLOCKED
+  DONE
+  CANCELLED
+}
+
+enum TaskPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum NotificationSeverity {
+  INFO
+  SUCCESS
+  WARNING
+  ERROR
+}
+
+enum HealthScoreCategory {
+  LOGIN
+  USAGE
+  SUPPORT
+  PAYMENT
+  ENGAGEMENT
+  NPS
+  RENEWAL
+  MANUAL
+}
+
+enum AutomationTrigger {
+  LEAD_CREATED
+  LEAD_STAGE_CHANGED
+  OPPORTUNITY_STAGE_CHANGED
+  OPPORTUNITY_WON
+  TICKET_CREATED
+  TICKET_OVERDUE
+  ONBOARDING_BLOCKED
+  HEALTH_SCORE_CHANGED
+  RENEWAL_APPROACHING
+  TASK_OVERDUE
+  CUSTOM
+}
+
+enum AutomationStatus {
+  ACTIVE
+  INACTIVE
+  DRAFT
+}
+
+enum SlaStatus {
+  ON_TIME
+  AT_RISK
+  BREACHED
+}
+
+// Models
+
+model Organisation {
+  id                   String             @id @default(cuid())
+  type                 OrganisationType
+  legalName            String
+  displayName          String
+  slug                 String             @unique
+  practiceName         String?
+  logoUrl              String?
+  website              String?
+  description          String?
+  industry             String?
+  practiceType         String?
+  registrationNumber   String?
+  taxNumber            String?            // encrypted/masked
+  primaryEmail         String
+  primaryPhone         String?
+  alternatePhone       String?
+  addressLine1         String?
+  addressLine2         String?
+  city                 String?
+  state                String?
+  country              String             @default("IN")
+  postalCode           String?
+  timezone             String             @default("Asia/Kolkata")
+  currency             String             @default("INR")
+  dateFormat           String             @default("DD/MM/YYYY")
+  language             String             @default("en")
+  status               OrganisationStatus @default(PROSPECT)
+  planId               String?
+  lifecycleStage       String?
+  ownerUserId          String?
+  csmUserId            String?
+  leadSource           String?
+  referralPartner      String?
+  onboardingStartDate  DateTime?
+  goLiveDate           DateTime?
+  renewalDate          DateTime?
+  churnDate            DateTime?
+  churnReason          String?
+  tags                 String[]           @default([])
+  customFields         Json               @default("{}")
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  deletedAt            DateTime?
+
+  // Relations
+  memberships          Membership[]
+  teams                Team[]
+  leads                Lead[]
+  contacts             Contact[]
+  opportunities        Opportunity[]
+  activities           Activity[]
+  accounts             Account[]
+  onboardingProjects   OnboardingProject[]
+  tickets              SupportTicket[]
+  clients              Client[]
+  appointments         Appointment[]
+  subscriptions        Subscription[]
+  invoices             Invoice[]
+  tasks                Task[]
+  campaigns            Campaign[]
+  notifications        Notification[]
+  auditLogs            AuditLog[]
+  automationRules      AutomationRule[]
+  knowledgeArticles    KnowledgeArticle[]
+  importJobs           ImportJob[]
+  exportJobs           ExportJob[]
+  plan                 Plan?              @relation(fields: [planId], references: [id])
+  ownerUser            User?              @relation("OrgOwner", fields: [ownerUserId], references: [id])
+  csmUser              User?              @relation("OrgCsm", fields: [csmUserId], references: [id])
+
+  @@index([slug])
+  @@index([status])
+  @@index([type])
+  @@map("organisations")
+}
+
+model User {
+  id                     String       @id @default(cuid())
+  fullName               String
+  firstName              String
+  lastName               String
+  email                  String       @unique
+  phoneCountryCode       String?
+  phoneNumber            String?
+  avatarUrl              String?
+  jobTitle               String?
+  department             String?
+  employeeCode           String?
+  timezone               String       @default("Asia/Kolkata")
+  locale                 String       @default("en-IN")
+  status                 UserStatus   @default(INVITED)
+  lastLoginAt            DateTime?
+  emailVerifiedAt        DateTime?
+  mfaEnabled             Boolean      @default(false)
+  notificationPreferences Json        @default("{}")
+  createdAt              DateTime     @default(now())
+  updatedAt              DateTime     @updatedAt
+
+  // Relations
+  credentials            UserCredential?
+  mfaSecrets             MfaSecret[]
+  sessions               Session[]
+  memberships            Membership[]
+  ownedOrganisations     Organisation[] @relation("OrgOwner")
+  csmOrganisations       Organisation[] @relation("OrgCsm")
+  ownedLeads             Lead[]         @relation("LeadOwner")
+  assignedLeads          Lead[]         @relation("LeadAssigned")
+  ownedOpportunities     Opportunity[]  @relation("OppOwner")
+  ownedActivities        Activity[]     @relation("ActivityOwner")
+  assignedActivities     Activity[]     @relation("ActivityAssigned")
+  ownedAccounts          Account[]      @relation("AccountOwner")
+  csmAccounts            Account[]      @relation("AccountCsm")
+  supportAccounts        Account[]      @relation("AccountSupport")
+  implementationProjects OnboardingProject[] @relation("OnboardingImpl")
+  csmProjects            OnboardingProject[] @relation("OnboardingCsm")
+  successPlans           SuccessPlan[]
+  assignedTickets        SupportTicket[]    @relation("TicketAssigned")
+  ticketComments         TicketComment[]
+  assignedTasks          Task[]             @relation("TaskAssigned")
+  ownedTasks             Task[]             @relation("TaskOwner")
+  notifications          Notification[]
+  auditLogs              AuditLog[]
+  loginAttempts          LoginAttempt[]
+  passwordResetTokens    PasswordResetToken[]
+  emailVerificationTokens EmailVerificationToken[]
+  invitations            Invitation[]       @relation("InviteSent")
+  receivedInvitations    Invitation[]       @relation("InviteReceived")
+
+  @@index([email])
+  @@index([status])
+  @@map("users")
+}
+
+model UserCredential {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  passwordHash   String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_credentials")
+}
+
+model MfaSecret {
+  id             String   @id @default(cuid())
+  userId         String
+  secret         String   // encrypted
+  recoveryCodes  String[] // hashed
+  isActive       Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  verifiedAt     DateTime?
+
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("mfa_secrets")
+}
+
+model Session {
+  id              String    @id @default(cuid())
+  userId          String
+  tokenHash       String    @unique
+  deviceInfo      Json      @default("{}")
+  ipAddressHash   String?
+  userAgent       String?
+  lastActiveAt    DateTime  @default(now())
+  expiresAt       DateTime
+  revokedAt       DateTime?
+  createdAt       DateTime  @default(now())
+
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model PasswordResetToken {
+  id          String    @id @default(cuid())
+  userId      String
+  tokenHash   String    @unique
+  usedAt      DateTime?
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tokenHash])
+  @@map("password_reset_tokens")
+}
+
+model EmailVerificationToken {
+  id          String    @id @default(cuid())
+  userId      String
+  tokenHash   String    @unique
+  usedAt      DateTime?
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tokenHash])
+  @@map("email_verification_tokens")
+}
+
+model LoginAttempt {
+  id            String   @id @default(cuid())
+  userId        String?
+  email         String
+  ipAddressHash String
+  success       Boolean
+  failureReason String?
+  createdAt     DateTime @default(now())
+
+  user          User?    @relation(fields: [userId], references: [id])
+
+  @@index([email])
+  @@index([ipAddressHash])
+  @@index([createdAt])
+  @@map("login_attempts")
+}
+
+model Invitation {
+  id             String    @id @default(cuid())
+  email          String
+  organisationId String
+  roleId         String
+  teamId         String?
+  invitedByUserId String
+  invitedUserId  String?
+  tokenHash      String    @unique
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  revokedAt      DateTime?
+  createdAt      DateTime  @default(now())
+
+  invitedBy      User      @relation("InviteSent", fields: [invitedByUserId], references: [id])
+  invitedUser    User?     @relation("InviteReceived", fields: [invitedUserId], references: [id])
+  role           Role      @relation(fields: [roleId], references: [id])
+
+  @@index([email])
+  @@index([tokenHash])
+  @@map("invitations")
+}
+
+model Role {
+  id             String       @id @default(cuid())
+  name           String
+  slug           String       @unique
+  description    String?
+  organisationType OrganisationType?
+  isSystem       Boolean      @default(false)
+  permissions    Permission[]
+  memberships    Membership[]
+  invitations    Invitation[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String   @id @default(cuid())
+  action      String   // e.g. "leads.create"
+  description String?
+  roles       Role[]
+  userOverrides UserPermissionOverride[]
+
+  @@unique([action])
+  @@map("permissions")
+}
+
+model UserPermissionOverride {
+  id             String     @id @default(cuid())
+  userId         String
+  organisationId String
+  permissionId   String
+  granted        Boolean    // true = explicit grant, false = explicit deny
+  createdAt      DateTime   @default(now())
+
+  permission     Permission @relation(fields: [permissionId], references: [id])
+
+  @@unique([userId, organisationId, permissionId])
+  @@map("user_permission_overrides")
+}
+
+model Membership {
+  id             String           @id @default(cuid())
+  userId         String
+  organisationId String
+  roleId         String
+  teamId         String?
+  status         MembershipStatus @default(PENDING)
+  isPrimary      Boolean          @default(false)
+  invitedBy      String?
+  invitedAt      DateTime?
+  acceptedAt     DateTime?
+  deactivatedAt  DateTime?
+  scopeType      ScopeType        @default(ASSIGNED)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  user           User             @relation(fields: [userId], references: [id])
+  organisation   Organisation     @relation(fields: [organisationId], references: [id])
+  role           Role             @relation(fields: [roleId], references: [id])
+  team           Team?            @relation(fields: [teamId], references: [id])
+
+  @@unique([userId, organisationId])
+  @@index([userId])
+  @@index([organisationId])
+  @@map("memberships")
+}
+
+model Team {
+  id             String    @id @default(cuid())
+  organisationId String
+  name           String
+  description    String?
+  teamType       TeamType
+  managerUserId  String?
+  status         String    @default("active")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organisation   Organisation @relation(fields: [organisationId], references: [id])
+  memberships    Membership[]
+  leads          Lead[]
+  opportunities  Opportunity[]
+  tickets        SupportTicket[]
+
+  @@index([organisationId])
+  @@map("teams")
+}
+
+model Lead {
+  id                      String             @id @default(cuid())
+  organisationId          String
+  leadNumber              String
+  firstName               String
+  lastName                String
+  fullName                String
+  email                   String?
+  phoneCountryCode        String?
+  phoneNumber             String?
+  alternatePhone          String?
+  whatsappNumber          String?
+  organisationName        String?
+  jobTitle                String?
+  website                 String?
+  city                    String?
+  state                   String?
+  country                 String?
+  leadSource              LeadSource         @default(OTHER)
+  sourceDetail            String?
+  campaignId              String?
+  lifecycleStage          LeadLifecycleStage @default(NEW)
+  leadScore               Int                @default(0)
+  qualificationStatus     String?
+  estimatedPracticeSize   String?
+  estimatedUsers          Int?
+  currentSoftware         String?
+  painPoints              String?
+  useCase                 String?
+  budgetRange             String?
+  expectedTimeline        String?
+  preferredContactMethod  String?
+  assignedToUserId        String?
+  assignedTeamId          String?
+  firstContactedAt        DateTime?
+  lastContactedAt         DateTime?
+  nextFollowUpAt          DateTime?
+  convertedAccountId      String?
+  convertedContactId      String?
+  lostReason              String?
+  disqualificationReason  String?
+  consentStatus           String?
+  consentSource           String?
+  tags                    String[]           @default([])
+  customFields            Json               @default("{}")
+  createdBy               String?
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
+  deletedAt               DateTime?
+
+  organisation            Organisation       @relation(fields: [organisationId], references: [id])
+  assignedTo              User?              @relation("LeadAssigned", fields: [assignedToUserId], references: [id])
+  owner                   User?              @relation("LeadOwner", fields: [createdBy], references: [id])
+  assignedTeam            Team?              @relation(fields: [assignedTeamId], references: [id])
+  campaign                Campaign?          @relation(fields: [campaignId], references: [id])
+  activities              Activity[]
+  convertedAccount        Account?           @relation(fields: [convertedAccountId], references: [id])
+
+  @@unique([organisationId, leadNumber])
+  @@index([organisationId])
+  @@index([lifecycleStage])
+  @@index([assignedToUserId])
+  @@index([nextFollowUpAt])
+  @@index([createdAt])
+  @@map("leads")
+}
+
+model Contact {
+  id                    String       @id @default(cuid())
+  organisationId        String
+  accountId             String?
+  firstName             String
+  lastName              String
+  fullName              String
+  preferredName         String?
+  email                 String?
+  secondaryEmail        String?
+  phoneCountryCode      String?
+  phoneNumber           String?
+  whatsappNumber        String?
+  jobTitle              String?
+  department            String?
+  contactType           ContactType  @default(OTHER)
+  isPrimary             Boolean      @default(false)
+  isDecisionMaker       Boolean      @default(false)
+  influenceLevel        String?
+  preferredLanguage     String?
+  preferredContactMethod String?
+  timezone              String?
+  linkedinUrl           String?
+  notes                 String?
+  consentStatus         String?
+  doNotContact          Boolean      @default(false)
+  lastContactedAt       DateTime?
+  tags                  String[]     @default([])
+  customFields          Json         @default("{}")
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+  deletedAt             DateTime?
+
+  organisation          Organisation @relation(fields: [organisationId], references: [id])
+  account               Account?     @relation(fields: [accountId], references: [id])
+  opportunities         Opportunity[]
+  activities            Activity[]
+  tickets               SupportTicket[]
+
+  @@index([organisationId])
+  @@index([accountId])
+  @@index([email])
+  @@map("contacts")
+}
+
+model Opportunity {
+  id                  String           @id @default(cuid())
+  organisationId      String
+  opportunityNumber   String
+  accountId           String?
+  primaryContactId    String?
+  name                String
+  type                OpportunityType  @default(NEW_BUSINESS)
+  stage               OpportunityStage @default(DISCOVERY)
+  amount              Decimal          @db.Decimal(15, 2)
+  currency            String           @default("INR")
+  probability         Int              @default(0)
+  weightedAmount      Decimal          @db.Decimal(15, 2)
+  expectedCloseDate   DateTime?
+  contractStartDate   DateTime?
+  contractEndDate     DateTime?
+  planId              String?
+  seatsOrUsers        Int?
+  billingFrequency    String?
+  nextStep            String?
+  competitor          String?
+  lossReason          String?
+  source              String?
+  ownerUserId         String?
+  teamId              String?
+  forecastCategory    ForecastCategory @default(PIPELINE)
+  wonAt               DateTime?
+  lostAt              DateTime?
+  tags                String[]         @default([])
+  customFields        Json             @default("{}")
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  deletedAt           DateTime?
+
+  organisation        Organisation     @relation(fields: [organisationId], references: [id])
+  account             Account?         @relation(fields: [accountId], references: [id])
+  primaryContact      Contact?         @relation(fields: [primaryContactId], references: [id])
+  owner               User?            @relation("OppOwner", fields: [ownerUserId], references: [id])
+  team                Team?            @relation(fields: [teamId], references: [id])
+  plan                Plan?            @relation(fields: [planId], references: [id])
+  stageHistory        OpportunityStageHistory[]
+  activities          Activity[]
+
+  @@unique([organisationId, opportunityNumber])
+  @@index([organisationId])
+  @@index([accountId])
+  @@index([stage])
+  @@index([ownerUserId])
+  @@index([expectedCloseDate])
+  @@map("opportunities")
+}
+
+model OpportunityStageHistory {
+  id             String           @id @default(cuid())
+  opportunityId  String
+  fromStage      OpportunityStage?
+  toStage        OpportunityStage
+  changedByUserId String?
+  reason         String?
+  createdAt      DateTime         @default(now())
+
+  opportunity    Opportunity      @relation(fields: [opportunityId], references: [id])
+
+  @@index([opportunityId])
+  @@map("opportunity_stage_history")
+}
+
+model Activity {
+  id                    String             @id @default(cuid())
+  organisationId        String
+  activityType          ActivityType
+  subject               String
+  description           String?
+  outcome               String?
+  status                ActivityStatus     @default(PLANNED)
+  priority              String?
+  dueAt                 DateTime?
+  startedAt             DateTime?
+  completedAt           DateTime?
+  durationMinutes       Int?
+  ownerUserId           String?
+  assignedToUserId      String?
+  relatedLeadId         String?
+  relatedAccountId      String?
+  relatedContactId      String?
+  relatedOpportunityId  String?
+  relatedTicketId       String?
+  externalReference     String?
+  reminderAt            DateTime?
+  visibility            ActivityVisibility @default(TEAM)
+  createdBy             String?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+
+  organisation          Organisation       @relation(fields: [organisationId], references: [id])
+  owner                 User?              @relation("ActivityOwner", fields: [ownerUserId], references: [id])
+  assignedTo            User?              @relation("ActivityAssigned", fields: [assignedToUserId], references: [id])
+  relatedLead           Lead?              @relation(fields: [relatedLeadId], references: [id])
+  relatedAccount        Account?           @relation(fields: [relatedAccountId], references: [id])
+  relatedContact        Contact?           @relation(fields: [relatedContactId], references: [id])
+  relatedOpportunity    Opportunity?       @relation(fields: [relatedOpportunityId], references: [id])
+  relatedTicket         SupportTicket?     @relation(fields: [relatedTicketId], references: [id])
+
+  @@index([organisationId])
+  @@index([ownerUserId])
+  @@index([dueAt])
+  @@index([relatedLeadId])
+  @@index([relatedAccountId])
+  @@map("activities")
+}
+
+model Account {
+  id                    String       @id @default(cuid())
+  organisationId        String
+  customerAccountCode   String?
+  accountName           String
+  accountType           String?
+  segment               String?
+  lifecycleStage        String?
+  ownerUserId           String?
+  csmUserId             String?
+  supportOwnerUserId    String?
+  healthStatus          HealthStatus @default(UNKNOWN)
+  healthScore           Int          @default(50)
+  healthScoreReason     String?
+  planId                String?
+  mrr                   Decimal?     @db.Decimal(15, 2)
+  arr                   Decimal?     @db.Decimal(15, 2)
+  contractValue         Decimal?     @db.Decimal(15, 2)
+  paymentStatus         String?
+  renewalDate           DateTime?
+  lastBusinessReviewAt  DateTime?
+  nextBusinessReviewAt  DateTime?
+  npsScore              Int?
+  csatScore             Int?
+  activeUsersCount      Int?
+  licensedUsersCount    Int?
+  adoptionPercentage    Decimal?     @db.Decimal(5, 2)
+  lastLoginAt           DateTime?
+  lastProductActivityAt DateTime?
+  expansionPotential    String?
+  riskReason            String?
+  competitors           String?
+  strategicNotes        String?
+  tags                  String[]     @default([])
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+
+  organisation          Organisation @relation(fields: [organisationId], references: [id])
+  owner                 User?        @relation("AccountOwner", fields: [ownerUserId], references: [id])
+  csmUser               User?        @relation("AccountCsm", fields: [csmUserId], references: [id])
+  supportOwner          User?        @relation("AccountSupport", fields: [supportOwnerUserId], references: [id])
+  plan                  Plan?        @relation(fields: [planId], references: [id])
+  contacts              Contact[]
+  opportunities         Opportunity[]
+  leads                 Lead[]
+  onboardingProjects    OnboardingProject[]
+  successPlans          SuccessPlan[]
+  healthScoreEvents     HealthScoreEvent[]
+  tickets               SupportTicket[]
+  subscriptions         Subscription[]
+  invoices              Invoice[]
+  payments              Payment[]
+  activities            Activity[]
+
+  @@index([organisationId])
+  @@index([healthStatus])
+  @@index([renewalDate])
+  @@index([ownerUserId])
+  @@map("accounts")
+}
+
+model OnboardingTemplate {
+  id          String              @id @default(cuid())
+  name        String
+  description String?
+  planId      String?
+  segment     String?
+  tasks       OnboardingTemplateTask[]
+  projects    OnboardingProject[]
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@map("onboarding_templates")
+}
+
+model OnboardingTemplateTask {
+  id           String             @id @default(cuid())
+  templateId   String
+  title        String
+  description  String?
+  phase        String
+  daysFromStart Int               @default(0)
+  order        Int
+  template     OnboardingTemplate @relation(fields: [templateId], references: [id])
+
+  @@index([templateId])
+  @@map("onboarding_template_tasks")
+}
+
+model OnboardingProject {
+  id                     String           @id @default(cuid())
+  organisationId         String
+  accountId              String
+  onboardingTemplateId   String?
+  projectName            String
+  status                 OnboardingStatus @default(NOT_STARTED)
+  kickoffDate            DateTime?
+  targetGoLiveDate       DateTime?
+  actualGoLiveDate       DateTime?
+  implementationOwnerId  String?
+  csmOwnerId             String?
+  progressPercentage     Int              @default(0)
+  currentPhase           String?
+  blockers               String?
+  successCriteria        String?
+  dataMigrationRequired  Boolean          @default(false)
+  trainingRequired       Boolean          @default(false)
+  integrationRequired    Boolean          @default(false)
+  notes                  String?
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
+
+  organisation           Organisation     @relation(fields: [organisationId], references: [id])
+  account                Account          @relation(fields: [accountId], references: [id])
+  template               OnboardingTemplate? @relation(fields: [onboardingTemplateId], references: [id])
+  implementationOwner    User?            @relation("OnboardingImpl", fields: [implementationOwnerId], references: [id])
+  csmOwner               User?            @relation("OnboardingCsm", fields: [csmOwnerId], references: [id])
+  tasks                  OnboardingTask[]
+
+  @@index([organisationId])
+  @@index([accountId])
+  @@index([status])
+  @@map("onboarding_projects")
+}
+
+model OnboardingTask {
+  id               String               @id @default(cuid())
+  onboardingId     String
+  title            String
+  description      String?
+  phase            String?
+  assignedToUserId String?
+  dueDate          DateTime?
+  status           OnboardingTaskStatus @default(TODO)
+  dependencyTaskId String?
+  completionNote   String?
+  completedAt      DateTime?
+  order            Int                  @default(0)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  onboarding       OnboardingProject    @relation(fields: [onboardingId], references: [id])
+  dependency       OnboardingTask?      @relation("TaskDependency", fields: [dependencyTaskId], references: [id])
+  dependents       OnboardingTask[]     @relation("TaskDependency")
+
+  @@index([onboardingId])
+  @@map("onboarding_tasks")
+}
+
+model SuccessPlan {
+  id               String   @id @default(cuid())
+  accountId        String
+  ownerUserId      String?
+  objective        String
+  targetOutcome    String?
+  metricName       String?
+  baselineValue    Decimal? @db.Decimal(15, 2)
+  targetValue      Decimal? @db.Decimal(15, 2)
+  currentValue     Decimal? @db.Decimal(15, 2)
+  targetDate       DateTime?
+  status           String   @default("active")
+  progressPercentage Int    @default(0)
+  risks            String?
+  nextReviewDate   DateTime?
+  notes            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  account          Account  @relation(fields: [accountId], references: [id])
+  owner            User?    @relation(fields: [ownerUserId], references: [id])
+
+  @@index([accountId])
+  @@map("success_plans")
+}
+
+model HealthScoreEvent {
+  id          String              @id @default(cuid())
+  accountId   String
+  category    HealthScoreCategory
+  scoreDelta  Int
+  scoreBefore Int
+  scoreAfter  Int
+  reason      String?
+  source      String?
+  createdAt   DateTime            @default(now())
+
+  account     Account             @relation(fields: [accountId], references: [id])
+
+  @@index([accountId])
+  @@index([createdAt])
+  @@map("health_score_events")
+}
+
+model SupportTicket {
+  id                  String         @id @default(cuid())
+  organisationId      String
+  ticketNumber        String
+  accountId           String?
+  contactId           String?
+  subject             String
+  description         String
+  category            String?
+  subcategory         String?
+  priority            TicketPriority @default(NORMAL)
+  status              TicketStatus   @default(NEW)
+  source              TicketSource   @default(PORTAL)
+  assignedToUserId    String?
+  teamId              String?
+  firstResponseDueAt  DateTime?
+  resolutionDueAt     DateTime?
+  firstRespondedAt    DateTime?
+  resolvedAt          DateTime?
+  closedAt            DateTime?
+  slaStatus           SlaStatus?
+  satisfactionScore   Int?
+  tags                String[]       @default([])
+  internalNotes       String?
+  customerVisibleNotes String?
+  createdBy           String?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  organisation        Organisation   @relation(fields: [organisationId], references: [id])
+  account             Account?       @relation(fields: [accountId], references: [id])
+  contact             Contact?       @relation(fields: [contactId], references: [id])
+  assignedTo          User?          @relation("TicketAssigned", fields: [assignedToUserId], references: [id])
+  team                Team?          @relation(fields: [teamId], references: [id])
+  comments            TicketComment[]
+  activities          Activity[]
+  attachments         TicketAttachment[]
+
+  @@unique([organisationId, ticketNumber])
+  @@index([organisationId])
+  @@index([status])
+  @@index([priority])
+  @@index([assignedToUserId])
+  @@map("support_tickets")
+}
+
+model TicketComment {
+  id             String            @id @default(cuid())
+  ticketId       String
+  authorUserId   String
+  body           String
+  visibility     CommentVisibility @default(CUSTOMER)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  ticket         SupportTicket     @relation(fields: [ticketId], references: [id])
+  author         User              @relation(fields: [authorUserId], references: [id])
+  attachments    TicketAttachment[]
+
+  @@index([ticketId])
+  @@map("ticket_comments")
+}
+
+model TicketAttachment {
+  id          String         @id @default(cuid())
+  ticketId    String?
+  commentId   String?
+  fileName    String
+  fileSize    Int
+  mimeType    String
+  storageKey  String
+  uploadedBy  String?
+  createdAt   DateTime       @default(now())
+
+  ticket      SupportTicket? @relation(fields: [ticketId], references: [id])
+  comment     TicketComment? @relation(fields: [commentId], references: [id])
+
+  @@index([ticketId])
+  @@map("ticket_attachments")
+}
+
+model Client {
+  id                      String       @id @default(cuid())
+  organisationId          String
+  clientNumber            String
+  firstName               String
+  lastName                String
+  preferredName           String?
+  dateOfBirth             DateTime?    // protected
+  gender                  String?
+  pronouns                String?
+  email                   String?      // protected
+  phone                   String?      // protected
+  emergencyContactName    String?      // protected
+  emergencyContactPhone   String?      // protected
+  address                 Json?        // protected
+  referralSource          String?
+  assignedPractitionerId  String?
+  status                  ClientStatus @default(ENQUIRY)
+  consentStatus           String?
+  communicationPreferences Json        @default("{}")
+  lastAppointmentAt       DateTime?
+  nextAppointmentAt       DateTime?
+  outstandingBalance      Decimal?     @db.Decimal(15, 2)
+  tags                    String[]     @default([])
+  customFields            Json         @default("{}")
+  createdAt               DateTime     @default(now())
+  updatedAt               DateTime     @updatedAt
+  deletedAt               DateTime?
+
+  organisation            Organisation @relation(fields: [organisationId], references: [id])
+  appointments            Appointment[]
+  clinicalNotes           ClinicalNote[]
+
+  @@unique([organisationId, clientNumber])
+  @@index([organisationId])
+  @@index([status])
+  @@index([assignedPractitionerId])
+  @@map("clients")
+}
+
+model ClinicalNote {
+  id             String   @id @default(cuid())
+  clientId       String
+  organisationId String
+  practitionerId String?
+  noteType       String
+  content        String   // encrypted at rest
+  sessionDate    DateTime?
+  isConfidential Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  client         Client   @relation(fields: [clientId], references: [id])
+
+  @@index([clientId])
+  @@index([organisationId])
+  @@map("clinical_notes")
+}
+
+model Appointment {
+  id                String            @id @default(cuid())
+  organisationId    String
+  clientId          String
+  practitionerId    String?
+  locationId        String?
+  appointmentType   String
+  status            AppointmentStatus @default(SCHEDULED)
+  startAt           DateTime
+  endAt             DateTime
+  timezone          String            @default("Asia/Kolkata")
+  recurrenceId      String?
+  notesVisibility   String?
+  cancellationReason String?
+  paymentStatus     String?
+  notes             String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  organisation      Organisation      @relation(fields: [organisationId], references: [id])
+  client            Client            @relation(fields: [clientId], references: [id])
+
+  @@index([organisationId])
+  @@index([clientId])
+  @@index([startAt])
+  @@index([practitionerId])
+  @@map("appointments")
+}
+
+model Plan {
+  id               String         @id @default(cuid())
+  name             String
+  slug             String         @unique
+  description      String?
+  monthlyPrice     Decimal        @db.Decimal(15, 2)
+  annualPrice      Decimal?       @db.Decimal(15, 2)
+  currency         String         @default("INR")
+  features         Json           @default("[]")
+  maxUsers         Int?
+  maxBranches      Int?
+  isActive         Boolean        @default(true)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  organisations    Organisation[]
+  accounts         Account[]
+  opportunities    Opportunity[]
+  subscriptions    Subscription[]
+
+  @@map("plans")
+}
+
+model Subscription {
+  id                   String             @id @default(cuid())
+  accountId            String
+  organisationId       String
+  planId               String?
+  status               SubscriptionStatus @default(TRIAL)
+  billingFrequency     String             @default("monthly")
+  startDate            DateTime
+  renewalDate          DateTime?
+  cancellationDate     DateTime?
+  seats                Int                @default(1)
+  amount               Decimal            @db.Decimal(15, 2)
+  currency             String             @default("INR")
+  paymentProvider      String?
+  providerCustomerId   String?
+  providerSubscriptionId String?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  account              Account            @relation(fields: [accountId], references: [id])
+  organisation         Organisation       @relation(fields: [organisationId], references: [id])
+  plan                 Plan?              @relation(fields: [planId], references: [id])
+  invoices             Invoice[]
+
+  @@index([accountId])
+  @@index([status])
+  @@index([renewalDate])
+  @@map("subscriptions")
+}
+
+model Invoice {
+  id               String        @id @default(cuid())
+  organisationId   String
+  accountId        String
+  subscriptionId   String?
+  invoiceNumber    String
+  status           InvoiceStatus @default(DRAFT)
+  issueDate        DateTime
+  dueDate          DateTime
+  subtotal         Decimal       @db.Decimal(15, 2)
+  tax              Decimal       @db.Decimal(15, 2) @default(0)
+  discount         Decimal       @db.Decimal(15, 2) @default(0)
+  total            Decimal       @db.Decimal(15, 2)
+  amountPaid       Decimal       @db.Decimal(15, 2) @default(0)
+  amountDue        Decimal       @db.Decimal(15, 2)
+  currency         String        @default("INR")
+  billingAddress   Json          @default("{}")
+  providerInvoiceId String?
+  notes            String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  organisation     Organisation  @relation(fields: [organisationId], references: [id])
+  account          Account       @relation(fields: [accountId], references: [id])
+  subscription     Subscription? @relation(fields: [subscriptionId], references: [id])
+  payments         Payment[]
+
+  @@unique([organisationId, invoiceNumber])
+  @@index([accountId])
+  @@index([status])
+  @@index([dueDate])
+  @@map("invoices")
+}
+
+model Payment {
+  id                  String        @id @default(cuid())
+  invoiceId           String
+  accountId           String
+  amount              Decimal       @db.Decimal(15, 2)
+  currency            String        @default("INR")
+  method              String?
+  status              PaymentStatus @default(PENDING)
+  transactionReference String?
+  providerPaymentId   String?
+  paidAt              DateTime?
+  failureReason       String?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  invoice             Invoice       @relation(fields: [invoiceId], references: [id])
+  account             Account       @relation(fields: [accountId], references: [id])
+
+  @@index([invoiceId])
+  @@index([accountId])
+  @@map("payments")
+}
+
+model Task {
+  id                String      @id @default(cuid())
+  organisationId    String
+  title             String
+  description       String?
+  taskType          String?
+  status            TaskStatus  @default(TODO)
+  priority          TaskPriority @default(NORMAL)
+  dueAt             DateTime?
+  completedAt       DateTime?
+  ownerUserId       String?
+  assignedToUserId  String?
+  relatedEntityType String?
+  relatedEntityId   String?
+  recurrenceRule    String?
+  createdBy         String?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  organisation      Organisation @relation(fields: [organisationId], references: [id])
+  owner             User?        @relation("TaskOwner", fields: [ownerUserId], references: [id])
+  assignedTo        User?        @relation("TaskAssigned", fields: [assignedToUserId], references: [id])
+
+  @@index([organisationId])
+  @@index([assignedToUserId])
+  @@index([dueAt])
+  @@index([status])
+  @@map("tasks")
+}
+
+model Campaign {
+  id             String   @id @default(cuid())
+  organisationId String
+  name           String
+  channel        String?
+  objective      String?
+  budget         Decimal? @db.Decimal(15, 2)
+  startDate      DateTime?
+  endDate        DateTime?
+  status         String   @default("draft")
+  utmSource      String?
+  utmMedium      String?
+  utmCampaign    String?
+  ownerUserId    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organisation   Organisation @relation(fields: [organisationId], references: [id])
+  leads          Lead[]
+
+  @@index([organisationId])
+  @@map("campaigns")
+}
+
+model Notification {
+  id             String               @id @default(cuid())
+  userId         String
+  organisationId String?
+  type           String
+  title          String
+  message        String
+  severity       NotificationSeverity @default(INFO)
+  actionUrl      String?
+  readAt         DateTime?
+  deliveredAt    DateTime?
+  createdAt      DateTime             @default(now())
+
+  user           User                 @relation(fields: [userId], references: [id])
+  organisation   Organisation?        @relation(fields: [organisationId], references: [id])
+
+  @@index([userId])
+  @@index([readAt])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  organisationId String?
+  actorUserId    String?
+  actorType      String?
+  action         String
+  resourceType   String
+  resourceId     String?
+  requestId      String?
+  ipAddressHash  String?
+  userAgentHash  String?
+  beforeJson     Json?
+  afterJson      Json?
+  reason         String?
+  createdAt      DateTime @default(now())
+
+  organisation   Organisation? @relation(fields: [organisationId], references: [id])
+  actor          User?         @relation(fields: [actorUserId], references: [id])
+
+  @@index([organisationId])
+  @@index([actorUserId])
+  @@index([action])
+  @@index([resourceType, resourceId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model AutomationRule {
+  id             String           @id @default(cuid())
+  organisationId String
+  name           String
+  description    String?
+  trigger        AutomationTrigger
+  conditions     Json             @default("[]")
+  actions        Json             @default("[]")
+  delaySeconds   Int?
+  status         AutomationStatus @default(DRAFT)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  organisation   Organisation     @relation(fields: [organisationId], references: [id])
+  executions     AutomationExecution[]
+
+  @@index([organisationId])
+  @@index([status])
+  @@map("automation_rules")
+}
+
+model AutomationExecution {
+  id             String   @id @default(cuid())
+  ruleId         String
+  triggeredBy    String?
+  status         String   @default("pending")
+  result         Json?
+  errorMessage   String?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime @default(now())
+
+  rule           AutomationRule @relation(fields: [ruleId], references: [id])
+
+  @@index([ruleId])
+  @@index([createdAt])
+  @@map("automation_executions")
+}
+
+model KnowledgeArticle {
+  id             String   @id @default(cuid())
+  organisationId String?
+  title          String
+  slug           String
+  content        String
+  category       String?
+  tags           String[] @default([])
+  isPublic       Boolean  @default(false)
+  authorUserId   String?
+  publishedAt    DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organisation   Organisation? @relation(fields: [organisationId], references: [id])
+
+  @@unique([slug])
+  @@index([organisationId])
+  @@map("knowledge_articles")
+}
+
+model ImportJob {
+  id             String   @id @default(cuid())
+  organisationId String
+  entityType     String
+  status         String   @default("pending")
+  fileName       String
+  storageKey     String
+  totalRows      Int?
+  processedRows  Int      @default(0)
+  successRows    Int      @default(0)
+  errorRows      Int      @default(0)
+  errors         Json     @default("[]")
+  fieldMapping   Json     @default("{}")
+  createdBy      String?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organisation   Organisation @relation(fields: [organisationId], references: [id])
+
+  @@index([organisationId])
+  @@index([status])
+  @@map("import_jobs")
+}
+
+model ExportJob {
+  id             String   @id @default(cuid())
+  organisationId String
+  entityType     String
+  status         String   @default("pending")
+  filters        Json     @default("{}")
+  storageKey     String?
+  downloadUrl    String?
+  expiresAt      DateTime?
+  rowCount       Int?
+  requestedBy    String?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organisation   Organisation @relation(fields: [organisationId], references: [id])
+
+  @@index([organisationId])
+  @@map("export_jobs")
+}
+
+// Atomic per-organisation sequence counters (tenant-safe serial numbers)
+model NumberCounter {
+  key     String   @id
+  value   Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@map("number_counters")
+}
+
+model WebhookDelivery {
+  id              String   @id @default(cuid())
+  provider        String
+  eventType       String
+  payload         Json
+  signatureValid  Boolean
+  idempotencyKey  String?
+  status          String   @default("received")
+  processedAt     DateTime?
+  errorMessage    String?
+  retryCount      Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  @@unique([provider, idempotencyKey])
+  @@index([provider])
+  @@index([eventType])
+  @@index([createdAt])
+  @@map("webhook_deliveries")
+}
+
+// ---------- Sheet <-> CRM sync ----------
+
+/// Last state both sides agreed on, per synced record (the merge base).
+model SyncRecordState {
+  id             String   @id @default(cuid())
+  organisationId String
+  entity         String
+  recordId       String
+  /// Stable id the sheet generated for a row it created; makes creates idempotent.
+  externalRef    String?
+  baseJson       Json     @default("{}")
+  lastSyncedAt   DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([organisationId, entity, recordId])
+  @@unique([organisationId, entity, externalRef])
+  @@index([organisationId])
+  @@map("sync_record_states")
+}
+
+/// Untouched copy of every inbound batch, kept before processing starts.
+model SyncBatch {
+  id             String   @id @default(cuid())
+  organisationId String
+  batchId        String
+  status         String   @default("received")
+  rawPayload     Json
+  resultJson     Json?
+  createdAt      DateTime @default(now())
+  completedAt    DateTime?
+
+  @@unique([organisationId, batchId])
+  @@index([organisationId, createdAt])
+  @@map("sync_batches")
+}
+
+/// Both sides changed the same field. The losing value is kept here, never dropped.
+model SyncConflict {
+  id             String    @id @default(cuid())
+  organisationId String
+  entity         String
+  recordId       String
+  field          String
+  crmValue       Json?
+  sheetValue     Json?
+  winner         String
+  status         String    @default("open")
+  createdAt      DateTime  @default(now())
+  resolvedAt     DateTime?
+
+  @@index([organisationId, status])
+  @@index([recordId])
+  @@map("sync_conflicts")
+}
+
+/// Rows that failed validation or were halted, with the reason and the original row.
+model SyncRejectedRow {
+  id             String   @id @default(cuid())
+  organisationId String
+  batchId        String
+  rowRef         String
+  reason         String
+  rawRow         Json?
+  createdAt      DateTime @default(now())
+
+  @@index([organisationId, createdAt])
+  @@index([batchId])
+  @@map("sync_rejected_rows")
+}

@@ -1,0 +1,66 @@
+/* Type probe 2 — bisect which composition breaks z.infer */
+import { z } from 'zod'
+import { safeText, tagsSchema, customFieldsSchema, emailSchema, phoneSchema } from '@/lib/validations/common'
+
+const A = z.object({ firstName: safeText(50) })
+type A = z.infer<typeof A>
+const a: A = null as never
+const aField: string = a.firstName
+
+const B = z.object({ firstName: safeText(50), tags: tagsSchema })
+type B = z.infer<typeof B>
+const b: B = null as never
+
+const C = z.object({ firstName: safeText(50), tags: tagsSchema, customFields: customFieldsSchema })
+type C = z.infer<typeof C>
+
+const D = z.object({ email: emailSchema.optional(), phone: phoneSchema.optional() }).superRefine((_, __) => {})
+const D_shadow = z.object({ email: emailSchema.optional(), phone: phoneSchema.optional() }).superRefine((d, ctx) => {
+  if (!d.email && !d.phone) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'x' })
+  }
+})
+void a
+void aField
+void b
+type Shadow_A = A
+void null as unknown as Shadow_A
+void null as unknown as B
+void null as unknown as C
+void null as unknown as ReturnType<typeof D.parse>
+void null as unknown as ReturnType<typeof D_shadow.parse>
+
+// Probe crm module's own contact schema: which single field breaks infer? Try building the same object piecemeal.
+import { contactCreateSchema as ContactSchema } from '@/lib/validations/crm'
+
+const Fields = ContactSchema.shape
+void null as unknown as z.infer<typeof Fields.firstName>
+void null as unknown as z.infer<typeof Fields.lastName>
+void null as unknown as z.infer<typeof Fields.email>
+void null as unknown as z.infer<typeof Fields.phone>
+void null as unknown as z.infer<typeof Fields.whatsappNumber>
+void null as unknown as z.infer<typeof Fields.organisationName>
+void null as unknown as z.infer<typeof Fields.jobTitle>
+void null as unknown as z.infer<typeof Fields.website>
+void null as unknown as z.infer<typeof Fields.city>
+void null as unknown as z.infer<typeof Fields.state>
+void null as unknown as z.infer<typeof Fields.country>
+void null as unknown as z.infer<typeof Fields.leadSource>
+void null as unknown as z.infer<typeof Fields.sourceDetail>
+void null as unknown as z.infer<typeof Fields.campaignId>
+void null as unknown as z.infer<typeof Fields.qualificationStatus>
+void null as unknown as z.infer<typeof Fields.estimatedPracticeSize>
+void null as unknown as z.infer<typeof Fields.estimatedUsers>
+void null as unknown as z.infer<typeof Fields.currentSoftware>
+void null as unknown as z.infer<typeof Fields.painPoints>
+void null as unknown as z.infer<typeof Fields.useCase>
+void null as unknown as z.infer<typeof Fields.budgetRange>
+void null as unknown as z.infer<typeof Fields.expectedTimeline>
+void null as unknown as z.infer<typeof Fields.preferredContactMethod>
+void null as unknown as z.infer<typeof Fields.assignedToUserId>
+void null as unknown as z.infer<typeof Fields.assignedTeamId>
+void null as unknown as z.infer<typeof Fields.nextFollowUpAt>
+void null as unknown as z.infer<typeof Fields.consentStatus>
+void null as unknown as z.infer<typeof Fields.consentSource>
+void null as unknown as z.infer<typeof Fields.tags>
+void null as unknown as z.infer<typeof Fields.customFields>

@@ -1,0 +1,139 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --background: 0 0% 100%;
+  --foreground: 224 71% 4%;
+  --card: 0 0% 100%;
+  --card-foreground: 224 71% 4%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 224 71% 4%;
+  --primary: 243 75% 59%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 220 14% 96%;
+  --secondary-foreground: 224 71% 4%;
+  --muted: 220 14% 96%;
+  --muted-foreground: 220 9% 46%;
+  --accent: 220 14% 96%;
+  --accent-foreground: 224 71% 4%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 220 13% 91%;
+  --input: 220 13% 91%;
+  --ring: 243 75% 59%;
+  --radius: 0.5rem;
+
+  --sidebar: 0 0% 98%;
+  --sidebar-foreground: 224 71% 4%;
+  --sidebar-border: 220 13% 91%;
+}
+
+.dark {
+  --background: 224 71% 4%;
+  --foreground: 210 20% 98%;
+  --card: 226 71% 6%;
+  --card-foreground: 210 20% 98%;
+  --popover: 226 71% 6%;
+  --popover-foreground: 210 20% 98%;
+  --primary: 243 75% 66%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 222 40% 12%;
+  --secondary-foreground: 210 20% 98%;
+  --muted: 222 40% 12%;
+  --muted-foreground: 215 20% 65%;
+  --accent: 222 40% 14%;
+  --accent-foreground: 210 20% 98%;
+  --destructive: 0 63% 50%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 222 40% 16%;
+  --input: 222 40% 16%;
+  --ring: 243 75% 66%;
+
+  --sidebar: 226 71% 5%;
+  --sidebar-foreground: 210 20% 98%;
+  --sidebar-border: 222 40% 16%;
+}
+
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+
+  --color-sidebar: hsl(var(--sidebar));
+  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
+  --color-sidebar-border: hsl(var(--sidebar-border));
+
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+
+  /* AuraDeck brand scale */
+  --color-auradeck-50: #f0f4ff;
+  --color-auradeck-100: #e0e9ff;
+  --color-auradeck-200: #c7d7fe;
+  --color-auradeck-300: #a5bafd;
+  --color-auradeck-400: #8193fa;
+  --color-auradeck-500: #6366f1;
+  --color-auradeck-600: #4f46e5;
+  --color-auradeck-700: #4338ca;
+  --color-auradeck-800: #3730a3;
+  --color-auradeck-900: #312e81;
+  --color-auradeck-950: #1e1b4b;
+
+  /* Account health indicators */
+  --color-health-healthy: #10b981;
+  --color-health-watch: #f59e0b;
+  --color-health-at-risk: #f97316;
+  --color-health-critical: #ef4444;
+  --color-health-unknown: #94a3b8;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, 'Cascadia Mono', Consolas, monospace;
+}
+
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Visible focus for keyboard users on every interactive element */
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+}
+
+@layer utilities {
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
