@@ -68,7 +68,6 @@ const config: ResourceConfig<ContactRow> = {
     { name: 'email', label: 'Email', kind: 'email', half: true },
     { name: 'secondaryEmail', label: 'Secondary email', kind: 'email', half: true },
     { name: 'phone', label: 'Phone', kind: 'tel', half: true },
-    { name: 'whatsappNumber', label: 'WhatsApp', kind: 'tel', half: true },
     { name: 'department', label: 'Department', kind: 'text', half: true },
     { name: 'preferredLanguage', label: 'Preferred language', kind: 'text', half: true },
     { name: 'contactType', label: 'Contact type', kind: 'select', options: contactType, half: true },

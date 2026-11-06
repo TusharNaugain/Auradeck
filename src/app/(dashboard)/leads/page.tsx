@@ -14,7 +14,6 @@ import {
   ExternalLink,
   Mail,
   MapPin,
-  MessageCircle,
   Phone,
   Plus,
   RefreshCw,
@@ -53,12 +52,11 @@ const createFields: FieldSpec[] = [
   { name: 'lastName', label: 'Last name', kind: 'text', half: true },
   { name: 'email', label: 'Email', kind: 'email', half: true },
   { name: 'phone', label: 'Phone', kind: 'tel', half: true },
-  { name: 'whatsappNumber', label: 'WhatsApp', kind: 'tel', half: true },
   { name: 'alternatePhone', label: 'Alternate phone', kind: 'tel', half: true },
-  { name: 'preferredContactMethod', label: 'Preferred contact', kind: 'select', options: preferredContactMethod, half: true },
+  { name: 'preferredContactMethod', label: 'Preferred contact', kind: 'select', options: preferredContactMethod.options.filter((m) => m !== 'whatsapp'), half: true },
   { name: 'organisationName', label: 'Practice / organisation', kind: 'text', half: true },
   { name: 'jobTitle', label: 'Job title', kind: 'text', half: true },
-  { name: 'leadSource', label: 'Source', kind: 'select', options: leadSource, half: true },
+  { name: 'leadSource', label: 'Source', kind: 'select', options: leadSource.options.filter((s) => s !== 'whatsapp'), half: true },
   { name: 'sourceDetail', label: 'Source details', kind: 'text', half: true },
   { name: 'website', label: 'Website', kind: 'url', half: true },
   { name: 'city', label: 'City', kind: 'text', half: true },
@@ -171,7 +169,6 @@ type LeadDetailsResponse = { lead: LeadDetails; activities: LeadActivity[] }
 
 const CUSTOM_FIELD_LABELS: Record<string, string> = {
   signedUpAt: 'Signed up',
-  whatsappOptIn: 'WhatsApp opt-in',
   waitlistSource: 'Signup source',
   invitedAt: 'Invited at',
   trialStartedAt: 'Trial started',
@@ -252,7 +249,7 @@ export default function LeadsPage() {
       return true
     })
   }, [leadsQuery.data?.items, tab])
-  const sources = leadSource.options
+  const sources = leadSource.options.filter((s) => s !== 'whatsapp')
   const allCount = leadsQuery.data?.total ?? 0
   const countByStage = React.useMemo(
     () => new Map((leadsQuery.data?.stageCounts ?? []).map(({ stage, count }) => [stage, count])),
@@ -737,7 +734,6 @@ function LeadDetailsSheet({
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   <ContactLink icon={Phone} label="Phone" value={lead.phoneNumber} href={lead.phoneNumber ? `tel:${lead.phoneNumber}` : undefined} />
                   <ContactLink icon={Phone} label="Alternate phone" value={lead.alternatePhone} href={lead.alternatePhone ? `tel:${lead.alternatePhone}` : undefined} />
-                  <ContactLink icon={MessageCircle} label="WhatsApp" value={lead.whatsappNumber} href={lead.whatsappNumber ? `https://wa.me/${lead.whatsappNumber.replace(/\D/g, '')}` : undefined} />
                   <ContactLink icon={Mail} label="Email" value={lead.email} href={lead.email ? `mailto:${lead.email}` : undefined} />
                   <ContactLink icon={ArrowUpRight} label="Website" value={lead.website} href={lead.website ? safeExternalUrl(lead.website) : undefined} />
                   {(lead.city || lead.state || lead.country) && <ContactLink icon={MapPin} label="Location" value={[lead.city, lead.state, lead.country].filter(Boolean).join(', ')} />}
@@ -912,7 +908,7 @@ function LeadDetailsSheet({
                   className="h-10 w-full rounded-md border border-input bg-background px-3"
                   disabled={!canLogActivity || interactionPending}
                 >
-                  {['call', 'email', 'whatsapp', 'meeting', 'demo', 'note', 'task', 'visit'].map((type) => (
+                  {['call', 'email', 'meeting', 'demo', 'note', 'task', 'visit'].map((type) => (
                     <option key={type} value={type}>{enumLabel(type)}</option>
                   ))}
                 </select>

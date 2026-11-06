@@ -8,7 +8,6 @@ import {
   CircleDollarSign,
   Clock3,
   Mail,
-  MessageCircle,
   Phone,
   RefreshCw,
   Target,
@@ -896,10 +895,9 @@ function OperationalDetailsDialog({
                   {record.date && <span>{formatDateTime(record.date)}</span>}
                   {record.amount !== null && <span>{formatCurrency(record.amount)}</span>}
                 </div>
-                {(record.phone || record.whatsapp || record.email) && (
+                {(record.phone || record.email) && (
                   <div className="mt-3 flex flex-wrap gap-2">
                     {record.phone && <RecordContactAction icon={Phone} label={record.phone} href={`tel:${record.phone}`} />}
-                    {record.whatsapp && <RecordContactAction icon={MessageCircle} label={record.whatsapp} href={`https://wa.me/${record.whatsapp.replace(/\D/g, '')}`} />}
                     {record.email && <RecordContactAction icon={Mail} label={record.email} href={`mailto:${record.email}`} />}
                   </div>
                 )}
@@ -980,9 +978,8 @@ function InlineLeadMetricCard({
                   </div>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {lead.phoneNumber && <RecordContactAction icon={Phone} label={lead.phoneNumber} href={`tel:${lead.phoneNumber}`} />}
-                    {lead.whatsappNumber && <RecordContactAction icon={MessageCircle} label={lead.whatsappNumber} href={`https://wa.me/${lead.whatsappNumber.replace(/\D/g, '')}`} />}
                     {lead.email && <RecordContactAction icon={Mail} label={lead.email} href={`mailto:${lead.email}`} />}
-                    {!lead.phoneNumber && !lead.whatsappNumber && !lead.email && (
+                    {!lead.phoneNumber && !lead.email && (
                       <span className="text-xs text-muted-foreground">No contact details added</span>
                     )}
                   </div>
@@ -1052,7 +1049,7 @@ function MetricRecordsDialog({
           <DialogTitle>{metric?.label} · {metric?.value}</DialogTitle>
           <DialogDescription>
             {recordsQuery.data
-              ? `${formatNumber(recordsQuery.data.length)} records. Contact names and available call, WhatsApp, and email links are shown below.`
+              ? `${formatNumber(recordsQuery.data.length)} records. Contact names and available call and email links are shown below.`
               : 'Loading records and contact options…'}
           </DialogDescription>
         </DialogHeader>
@@ -1094,10 +1091,9 @@ function MetricRecordsDialog({
                       {record.date && <span className="text-xs text-muted-foreground">{formatRelative(record.date)}</span>}
                     </span>
                   </div>
-                  {(record.phone || record.whatsapp || record.email) && (
+                  {(record.phone || record.email) && (
                     <div className="mt-3 flex flex-wrap gap-2">
                       {record.phone && <RecordContactAction icon={Phone} label={record.phone} href={`tel:${record.phone}`} />}
-                      {record.whatsapp && <RecordContactAction icon={MessageCircle} label={record.whatsapp} href={`https://wa.me/${record.whatsapp.replace(/\D/g, '')}`} />}
                       {record.email && <RecordContactAction icon={Mail} label={record.email} href={`mailto:${record.email}`} />}
                     </div>
                   )}
@@ -1242,7 +1238,6 @@ function RecordDetailContent({ record, detail }: { record: DashboardRecord; deta
           <div className="grid gap-2 sm:grid-cols-2">
             <DetailContact icon={Phone} label="Phone" value={contact.phone} href={contact.phone ? `tel:${contact.phone}` : undefined} />
             {detail.lead?.alternatePhone && <DetailContact icon={Phone} label="Alternate phone" value={detail.lead.alternatePhone} href={`tel:${detail.lead.alternatePhone}`} />}
-            <DetailContact icon={MessageCircle} label="WhatsApp" value={contact.whatsapp} href={contact.whatsapp ? `https://wa.me/${contact.whatsapp.replace(/\D/g, '')}` : undefined} />
             <DetailContact icon={Mail} label="Email" value={contact.email} href={contact.email ? `mailto:${contact.email}` : undefined} />
             {contact.lastContactedAt && <DetailContact icon={Clock3} label="Last interaction" value={formatRelative(contact.lastContactedAt)} />}
           </div>

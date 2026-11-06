@@ -1,6 +1,5 @@
 /**
  * /api/billing/payments — record payments manually or view history (GET/POST).
- * Payment provider callbacks live in /api/webhooks/razorpay.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
