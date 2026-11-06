@@ -75,7 +75,10 @@ export async function exchangeGoogleCode(code: string, codeVerifier: string, non
     cache: 'no-store',
   })
 
-  if (!response.ok) throw new Error('Google authorization code exchange failed')
+  if (!response.ok) {
+    const detail = await response.text().catch(() => '')
+    throw new Error(`Google authorization code exchange failed (${response.status}): ${detail.slice(0, 300)}`)
+  }
   const tokenBody = await response.json() as { id_token?: unknown }
   if (typeof tokenBody.id_token !== 'string') throw new Error('Google ID token missing')
 

@@ -40,10 +40,17 @@ export async function GET(req: NextRequest) {
   await session.save()
 
   if (!stateValid || !issuedAt || Date.now() - issuedAt > OAUTH_STATE_TTL_MS || !verifier || !nonce) {
+    console.error('[google-oauth/callback] invalid state/session', {
+      stateValid, hasIssuedAt: Boolean(issuedAt), hasVerifier: Boolean(verifier), hasNonce: Boolean(nonce),
+      hasSessionCookie: Boolean(req.cookies.get('auradeck_session')),
+    })
     return loginRedirect({ google_error: 'failed' })
   }
 
-  if (req.nextUrl.searchParams.has('error')) return loginRedirect({ google_error: 'failed' })
+  if (req.nextUrl.searchParams.has('error')) {
+    console.error('[google-oauth/callback] Google returned error:', req.nextUrl.searchParams.get('error'))
+    return loginRedirect({ google_error: 'failed' })
+  }
   const code = req.nextUrl.searchParams.get('code')
   if (!code) return loginRedirect({ google_error: 'failed' })
 
