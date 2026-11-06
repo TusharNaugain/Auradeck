@@ -77,4 +77,25 @@ function loadEnv(): Env {
   return envSchema.parse(sanitized)
 }
 
-export const env = loadEnv()
+/**
+ * In production a localhost NEXT_PUBLIC_APP_URL is always a misconfiguration and
+ * breaks OAuth redirects. Fall back to the platform-provided public domain.
+ */
+function resolveAppUrl(e: Env): Env {
+  if (typeof window !== 'undefined' || e.NODE_ENV !== 'production') return e
+  let host = ''
+  try {
+    host = new URL(e.NEXT_PUBLIC_APP_URL).hostname
+  } catch {
+    host = ''
+  }
+  const isLocal = !host || ['localhost', '127.0.0.1', '0.0.0.0'].includes(host)
+  const publicDomain = process.env.RAILWAY_PUBLIC_DOMAIN?.trim()
+  if (isLocal && publicDomain) {
+    console.warn(`⚠️ NEXT_PUBLIC_APP_URL is "${e.NEXT_PUBLIC_APP_URL}" in production; using https://${publicDomain}`)
+    return { ...e, NEXT_PUBLIC_APP_URL: `https://${publicDomain}` }
+  }
+  return e
+}
+
+export const env = resolveAppUrl(loadEnv())
