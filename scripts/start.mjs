@@ -10,8 +10,22 @@ function run(cmd, args) {
   return spawnSync(cmd, args, { stdio: 'inherit', shell: process.platform === 'win32' }).status ?? 1
 }
 
-if (run('npx', ['prisma', 'migrate', 'deploy']) !== 0) {
-  console.error('[start] prisma migrate deploy failed; aborting.')
+// Railway's private network (and a freshly restarted Postgres) can take a few
+// seconds to become reachable, so retry migrations before giving up.
+const MIGRATE_ATTEMPTS = 6
+let migrated = false
+for (let attempt = 1; attempt <= MIGRATE_ATTEMPTS; attempt++) {
+  if (run('npx', ['prisma', 'migrate', 'deploy']) === 0) {
+    migrated = true
+    break
+  }
+  if (attempt < MIGRATE_ATTEMPTS) {
+    console.error(`[start] migrate attempt ${attempt} failed; retrying in 5s...`)
+    await new Promise((r) => setTimeout(r, 5000))
+  }
+}
+if (!migrated) {
+  console.error('[start] prisma migrate deploy failed; aborting. Check DATABASE_URL on the app service.')
   process.exit(1)
 }
 
