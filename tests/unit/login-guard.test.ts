@@ -9,7 +9,12 @@ const { redis, createLoginAttempt } = vi.hoisted(() => ({
   createLoginAttempt: vi.fn(),
 }))
 
-vi.mock('@/lib/redis', () => ({ redis }))
+vi.mock('@/lib/redis', () => ({
+  redis,
+  get useLocalStore() {
+    return process.env.NODE_ENV === 'development'
+  },
+}))
 vi.mock('@/lib/db', () => ({
   db: { loginAttempt: { create: createLoginAttempt } },
 }))

@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { redis } from '@/lib/redis'
+import { redis, useLocalStore } from '@/lib/redis'
 import { checkFirestoreConnection } from '@/lib/firebase-admin'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
     checks.database = { status: 'down', error: err instanceof Error ? err.message : 'unknown' }
   }
 
-  if (process.env.NODE_ENV === 'development') {
+  if (useLocalStore) {
     checks.redis = { status: 'skipped' }
   } else {
     try {

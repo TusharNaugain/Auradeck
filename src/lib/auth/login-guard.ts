@@ -4,7 +4,7 @@
  */
 
 import { db } from '@/lib/db'
-import { redis } from '@/lib/redis'
+import { redis, useLocalStore } from '@/lib/redis'
 
 const MAX_ATTEMPTS = 5
 const LOCKOUT_WINDOW_SECONDS = 300 // 5 minutes
@@ -59,7 +59,7 @@ export async function checkLoginAllowed(
 
   let emailCount: number
   let ipCount: number
-  if (process.env.NODE_ENV === 'development') {
+  if (useLocalStore) {
     const now = Date.now()
     emailCount = getLocalAttemptCount(emailKey, now)
     ipCount = getLocalAttemptCount(ipKey, now)
@@ -100,7 +100,7 @@ export async function recordLoginAttempt(
   const emailKey = `login_attempts:email:${email}`
   const ipKey = `login_attempts:ip:${ipAddressHash}`
 
-  if (process.env.NODE_ENV === 'development') {
+  if (useLocalStore) {
     if (success) {
       localAttempts.delete(emailKey)
       localAttempts.delete(ipKey)
@@ -154,7 +154,7 @@ export async function recordLoginAttempt(
  */
 export async function clearLoginLockout(email: string) {
   const key = `login_attempts:email:${email}`
-  if (process.env.NODE_ENV === 'development') {
+  if (useLocalStore) {
     localAttempts.delete(key)
   } else {
     await redis.del(key)

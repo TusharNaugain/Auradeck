@@ -13,7 +13,7 @@ const envSchema = z.object({
   DATABASE_URL: z.string().default(
     process.env.DATABASE_URL || 'postgresql://postgres:postgres@127.0.0.1:5432/placeholder?schema=public'
   ),
-  REDIS_URL: z.string().default('redis://localhost:6379'),
+  REDIS_URL: z.string().optional(),
   SESSION_SECRET: z.string().min(32, 'SESSION_SECRET must be at least 32 characters').default(
     process.env.SESSION_SECRET || '3ba656f3d7c696839825a8fbae6254d6925573c2471d1899a2b1df3c9476f5b3'
   ),

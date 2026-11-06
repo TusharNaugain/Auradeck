@@ -18,6 +18,9 @@ vi.mock('@/lib/redis', () => ({
     del: redisDel,
     pipeline: redisPipeline,
   },
+  get useLocalStore() {
+    return process.env.NODE_ENV === 'development'
+  },
 }))
 
 import { checkLoginAllowed, recordLoginAttempt } from '@/lib/auth/login-guard'

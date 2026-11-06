@@ -3,7 +3,7 @@
  * Returns HTTP 429 with safe messages and Retry-After headers.
  */
 
-import { redis } from '@/lib/redis'
+import { redis, useLocalStore } from '@/lib/redis'
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 
@@ -103,7 +103,7 @@ export async function rateLimit(
   const now = Date.now()
   const windowMs = config.windowSeconds * 1000
 
-  if (process.env.NODE_ENV === 'development') {
+  if (useLocalStore) {
     return localRateLimit(redisKey, config, now)
   }
 

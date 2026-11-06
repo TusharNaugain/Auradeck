@@ -8,7 +8,12 @@ const { queryRaw, ping, checkFirestoreConnection } = vi.hoisted(() => ({
 }))
 
 vi.mock('@/lib/db', () => ({ db: { $queryRaw: queryRaw } }))
-vi.mock('@/lib/redis', () => ({ redis: { ping } }))
+vi.mock('@/lib/redis', () => ({
+  redis: { ping },
+  get useLocalStore() {
+    return process.env.NODE_ENV === 'development'
+  },
+}))
 vi.mock('@/lib/firebase-admin', () => ({ checkFirestoreConnection }))
 
 import { GET } from '@/app/api/health/route'
