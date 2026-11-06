@@ -15,13 +15,18 @@ export interface SyncRequestContext {
 }
 
 /**
- * SYNC_ORGANISATION_ID wins when set. Otherwise use the internal organisation, so a freshly
- * bootstrapped deployment needs no manual id copy-paste.
+ * SYNC_ORGANISATION_ID is used when it points at an organisation that exists in THIS database.
+ * A stale id (for example one copied from a local database) is ignored with a warning and the
+ * active internal organisation is used instead, so sync never writes under a missing org.
  */
 async function resolveOrganisationId(): Promise<string | null> {
-  const configured = process.env.SYNC_ORGANISATION_ID?.trim()
-  if (configured) return configured
   const { db } = await import('@/lib/db')
+  const configured = process.env.SYNC_ORGANISATION_ID?.trim()
+  if (configured) {
+    const found = await db.organisation.findUnique({ where: { id: configured }, select: { id: true } })
+    if (found) return found.id
+    console.warn('[sync] SYNC_ORGANISATION_ID does not exist in this database; falling back to the internal organisation')
+  }
   const org = await db.organisation.findFirst({
     where: { type: 'AURADESK_INTERNAL', status: 'ACTIVE' },
     orderBy: { createdAt: 'asc' },
