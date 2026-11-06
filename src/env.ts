@@ -82,7 +82,10 @@ function loadEnv(): Env {
  * breaks OAuth redirects. Fall back to the platform-provided public domain.
  */
 function resolveAppUrl(e: Env): Env {
-  if (typeof window !== 'undefined' || e.NODE_ENV !== 'production') return e
+  if (typeof window !== 'undefined') return e
+  const publicDomain = process.env.RAILWAY_PUBLIC_DOMAIN?.trim()
+  // On Railway a localhost URL is never correct, whatever NODE_ENV says.
+  if (e.NODE_ENV !== 'production' && !publicDomain) return e
   let host = ''
   try {
     host = new URL(e.NEXT_PUBLIC_APP_URL).hostname
@@ -90,7 +93,6 @@ function resolveAppUrl(e: Env): Env {
     host = ''
   }
   const isLocal = !host || ['localhost', '127.0.0.1', '0.0.0.0'].includes(host)
-  const publicDomain = process.env.RAILWAY_PUBLIC_DOMAIN?.trim()
   if (isLocal && publicDomain) {
     console.warn(`⚠️ NEXT_PUBLIC_APP_URL is "${e.NEXT_PUBLIC_APP_URL}" in production; using https://${publicDomain}`)
     return { ...e, NEXT_PUBLIC_APP_URL: `https://${publicDomain}` }
