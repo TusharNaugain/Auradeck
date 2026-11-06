@@ -56,16 +56,25 @@ const envSchema = z.object({
   ALLOWED_ORIGINS: z.string().default('http://localhost:3000'),
 })
 
-// Only validate on server side
-const _env = typeof window === 'undefined'
-  ? envSchema.safeParse(process.env)
-  : { success: true, data: {} as z.infer<typeof envSchema> }
+type Env = z.infer<typeof envSchema>
 
-if (typeof window === 'undefined' && !_env.success) {
-  console.warn('⚠️ Environment variable validation warnings:')
-  if ('error' in _env) {
-    console.warn(_env.error.flatten().fieldErrors)
-  }
+function loadEnv(): Env {
+  // Only validate on server side
+  if (typeof window !== 'undefined') return {} as Env
+
+  const result = envSchema.safeParse(process.env)
+  if (result.success) return result.data
+
+  // Drop only the invalid variables and fall back to their defaults, so one bad
+  // value (e.g. a malformed EMAIL_FROM_ADDRESS) does not discard every other
+  // configured variable such as GOOGLE_CLIENT_ID or DATABASE_URL.
+  const fieldErrors = result.error.flatten().fieldErrors
+  console.warn('⚠️ Environment variable validation warnings (using defaults for these):')
+  console.warn(fieldErrors)
+
+  const sanitized: Record<string, string | undefined> = { ...process.env }
+  for (const key of Object.keys(fieldErrors)) delete sanitized[key]
+  return envSchema.parse(sanitized)
 }
 
-export const env = (_env.success ? _env.data : envSchema.parse({})) as z.infer<typeof envSchema>
+export const env = loadEnv()
