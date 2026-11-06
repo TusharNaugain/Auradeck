@@ -50,7 +50,7 @@ if (!migrated) {
   process.exit(1)
 }
 
-if (process.env.BOOTSTRAP_ADMIN_EMAIL) {
+if (process.env.BOOTSTRAP_ADMIN_EMAIL || process.env.BOOTSTRAP_MEMBER_EMAILS) {
   if (run('npx', ['tsx', 'src/lib/db/bootstrap.ts']) !== 0) {
     console.error('[start] bootstrap failed; continuing to start the app.')
   }
