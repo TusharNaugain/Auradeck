@@ -14,6 +14,22 @@ export interface SyncRequestContext {
   rawBody: string
 }
 
+/**
+ * SYNC_ORGANISATION_ID wins when set. Otherwise use the internal organisation, so a freshly
+ * bootstrapped deployment needs no manual id copy-paste.
+ */
+async function resolveOrganisationId(): Promise<string | null> {
+  const configured = process.env.SYNC_ORGANISATION_ID?.trim()
+  if (configured) return configured
+  const { db } = await import('@/lib/db')
+  const org = await db.organisation.findFirst({
+    where: { type: 'AURADESK_INTERNAL', status: 'ACTIVE' },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true },
+  })
+  return org?.id ?? null
+}
+
 function fail(status: number, code: string, message: string) {
   return NextResponse.json({ success: false, code, error: message }, { status })
 }
@@ -26,7 +42,7 @@ export async function authenticateSync(
   req: NextRequest,
   mode: 'body' | 'query'
 ): Promise<SyncRequestContext | NextResponse> {
-  const organisationId = process.env.SYNC_ORGANISATION_ID?.trim()
+  const organisationId = await resolveOrganisationId()
   if (!organisationId) return fail(503, 'SYNC_NOT_CONFIGURED', 'Sync is not configured')
 
   const rawBody = mode === 'body' ? await req.text() : ''

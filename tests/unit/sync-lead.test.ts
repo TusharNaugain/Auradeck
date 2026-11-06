@@ -239,3 +239,26 @@ describe('payload limits', () => {
     expect(pushPayloadSchema.safeParse({ batchId: 'batch-12345678', rows }).success).toBe(false)
   })
 })
+
+describe('lead numbers unknown to this CRM', () => {
+  it('re-creates the row as a new lead when it carries an externalRef', async () => {
+    const store = new FakeStore()
+    const payload = pushPayloadSchema.parse({
+      batchId: 'unknown-number-batch-1',
+      rows: [{ rowRef: 'r1', leadNumber: 'LD-000042', externalRef: 'ext-unknown-0001', fields: { firstName: 'Casey', email: 'casey@example.test' } }],
+    })
+    const res = await processPush(store, 'org_1', payload)
+    expect(res.rows[0].status).toBe('created')
+    expect(res.rows[0].leadNumber).not.toBe('LD-000042')
+  })
+
+  it('still rejects an unknown lead number that has no externalRef', async () => {
+    const store = new FakeStore()
+    const payload = pushPayloadSchema.parse({
+      batchId: 'unknown-number-batch-2',
+      rows: [{ rowRef: 'r1', leadNumber: 'LD-000042', fields: { city: 'Mumbai' } }],
+    })
+    const res = await processPush(store, 'org_1', payload)
+    expect(res.rows[0].status).toBe('rejected')
+  })
+})

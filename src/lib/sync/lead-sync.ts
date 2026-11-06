@@ -178,9 +178,14 @@ async function planRow(
   if (Object.keys(incoming).length === 0) return reject('Row has no recognised columns')
 
   /* ---- existing lead: merge ---- */
-  if (row.leadNumber) {
-    const lead = await store.findLeadByNumber(org, row.leadNumber)
-    if (!lead) return reject(`Unknown lead number ${row.leadNumber}`)
+  // A lead number this CRM has never issued (e.g. the sheet was previously synced to another
+  // database) is treated as a new lead when the row carries an externalRef, so the sheet can
+  // be re-pushed into a fresh CRM. Without an externalRef it is still rejected as a likely typo.
+  const knownLead = row.leadNumber ? await store.findLeadByNumber(org, row.leadNumber) : null
+  if (row.leadNumber && !knownLead && !row.externalRef) return reject(`Unknown lead number ${row.leadNumber}`)
+
+  if (row.leadNumber && knownLead) {
+    const lead = knownLead
     if (lead.deletedAt) return reject(`${row.leadNumber} is archived in the CRM; restore it there before editing`)
 
     const base = await store.getBase(org, lead.id)
