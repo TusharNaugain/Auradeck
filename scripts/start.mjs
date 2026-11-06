@@ -10,6 +10,27 @@ function run(cmd, args) {
   return spawnSync(cmd, args, { stdio: 'inherit', shell: process.platform === 'win32' }).status ?? 1
 }
 
+// Print where DATABASE_URL points (never the credentials) and fail fast on a
+// local value when running on Railway, which can never be right there.
+function describeDatabaseUrl(raw) {
+  if (!raw) return { host: '(empty)', db: '', local: true }
+  try {
+    const u = new URL(raw)
+    return { host: u.hostname, db: u.pathname.replace(/^\//, ''), local: ['localhost', '127.0.0.1', '::1', '[::1]'].includes(u.hostname) }
+  } catch {
+    return { host: '(unparseable)', db: '', local: true }
+  }
+}
+const dbInfo = describeDatabaseUrl(process.env.DATABASE_URL)
+console.log(`[start] DATABASE_URL -> host=${dbInfo.host} db=${dbInfo.db} (NODE_ENV=${process.env.NODE_ENV ?? 'unset'})`)
+if (process.env.RAILWAY_ENVIRONMENT_NAME && dbInfo.local) {
+  console.error(
+    '[start] DATABASE_URL points to localhost/empty on Railway. On the APP service set DATABASE_URL to the ' +
+    'Postgres reference (${{<PostgresServiceName>.DATABASE_URL}}), press Deploy so the change applies, and remove NODE_ENV=development.'
+  )
+  process.exit(1)
+}
+
 // Railway's private network (and a freshly restarted Postgres) can take a few
 // seconds to become reachable, so retry migrations before giving up.
 const MIGRATE_ATTEMPTS = 6
