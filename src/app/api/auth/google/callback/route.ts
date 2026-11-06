@@ -94,7 +94,8 @@ export async function GET(req: NextRequest) {
     await createAuditLog({ actorUserId: user.id, action: 'auth.login_success', resourceType: 'auth', resourceId: user.id })
 
     return NextResponse.redirect(new URL(next, env.NEXT_PUBLIC_APP_URL))
-  } catch {
+  } catch (err) {
+    console.error('[google-oauth/callback] failed:', err instanceof Error ? err.message : err)
     return loginRedirect({ google_error: 'failed' })
   }
 }

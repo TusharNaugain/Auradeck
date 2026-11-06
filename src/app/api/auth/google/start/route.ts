@@ -24,7 +24,12 @@ export async function GET(req: NextRequest) {
     await session.save()
 
     return NextResponse.redirect(authorizationUrl)
-  } catch {
+  } catch (err) {
+    console.error('[google-oauth/start] failed:', err instanceof Error ? err.message : err, {
+      hasClientId: Boolean(env.GOOGLE_CLIENT_ID),
+      hasClientSecret: Boolean(env.GOOGLE_CLIENT_SECRET),
+      appUrl: env.NEXT_PUBLIC_APP_URL,
+    })
     return NextResponse.redirect(new URL('/login?google_error=unavailable', env.NEXT_PUBLIC_APP_URL))
   }
 }
