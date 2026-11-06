@@ -422,7 +422,10 @@ function pushPhase_(ctx, state, summary, confirmMassChange) {
       confirmMassChange: confirmMassChange === true,
       rows: chunk.map(function (r) {
         const row = { rowRef: r.key, fields: r.fields };
-        if (r.leadNumber) row.leadNumber = r.leadNumber; else row.externalRef = r.externalRef;
+        // Send both when present: if the CRM does not know this lead number (e.g. the sheet was
+        // synced to another database before), the stable externalRef lets it re-create the lead.
+        if (r.leadNumber) row.leadNumber = r.leadNumber;
+        if (r.externalRef) row.externalRef = r.externalRef;
         return row;
       }),
     };
@@ -453,7 +456,8 @@ function applyPushResults_(ctx, state, summary, sentRows, response) {
     }
 
     // created / updated / unchanged
-    if (result.leadNumber && !row.leadNumber) ctx.sheet.getRange(row.rowIndex, ctx.leadCol + 1).setValue(result.leadNumber);
+    // Also overwrite a stale number: the CRM may have issued a new one for this row.
+    if (result.leadNumber && result.leadNumber !== row.leadNumber) ctx.sheet.getRange(row.rowIndex, ctx.leadCol + 1).setValue(result.leadNumber);
     const fields = result.record ? writeRecord_(ctx, row.rowIndex, result.record, row.values) : row.fields;
     const newKey = result.leadNumber || row.key;
     if (newKey !== row.key) delete state[row.key];
