@@ -193,7 +193,7 @@ describe('sheet script: Beta Tracker configuration (BetaTracker.gs)', () => {
   const betaSource = readFileSync(path.resolve(process.cwd(), 'docs/sheet-sync/BetaTracker.gs'), 'utf8')
   const betaContext = createContext({ Utilities, console })
   new Script(betaSource).runInContext(betaContext)
-  const beta = runInContext('({ CONFIG, mapHeaders_, rowToFields_, newRef_, normalizePhone_, pendingEmails_, mailBody_ })', betaContext) as {
+  const beta = runInContext('({ CONFIG, mapHeaders_, rowToFields_, newRef_, normalizePhone_, pendingEmails_, mailBody_, sameValue_, writeRecord_ })', betaContext) as {
     CONFIG: { COLUMN_MAP: Record<string, string>; SHEET_NAME: string }
     mapHeaders_: (h: unknown[], m?: Record<string, string>) => Record<string, number>
     rowToFields_: (m: Record<string, number>, r: unknown[]) => Record<string, string>
@@ -201,6 +201,8 @@ describe('sheet script: Beta Tracker configuration (BetaTracker.gs)', () => {
     normalizePhone_: (v: string) => string
     pendingEmails_: (h: unknown[], r: unknown[][]) => { nameCol: number; emailCol: number; sentCol: number; pending: Array<{ index: number; name: string; email: string }> }
     mailBody_: (name: string) => string
+    sameValue_: (field: string, a: unknown, b: unknown) => boolean
+    writeRecord_: (ctx: unknown, row: number, record: Record<string, string>, values: unknown[]) => Record<string, string>
   }
 
   const headers = [
@@ -260,6 +262,31 @@ describe('sheet script: Beta Tracker configuration (BetaTracker.gs)', () => {
     expect(plain.CONFIG.REF_PREFIX).toBe('')
     expect(plain.newRef_({ email: 'a@b.co' })).toBe('uuid')
     expect(plain.normalizePhone_('9828660949')).toBe('9828660949')
+  })
+
+  describe('sheet cells that refuse a write', () => {
+    it('treats 7042524525 and +917042524525 as the same phone, so the cell is not rewritten', () => {
+      expect(beta.sameValue_('phone', 7042524525, '+917042524525')).toBe(true)
+      expect(beta.sameValue_('phone', '9828660949', '+919828660949')).toBe(true)
+      expect(beta.sameValue_('phone', '9828660949', '+919828660950')).toBe(false)
+    })
+
+    it('does not abort the sync when a cell has a data-validation rule', () => {
+      const writes: unknown[][] = []
+      const ctx = {
+        mapping: { phone: 2, city: 3 },
+        sheet: {
+          getRange: (row: number, col: number) => ({
+            setValue: (value: unknown) => {
+              if (col === 4) throw new Error('The data you entered in cell D2 violates the data validation rules')
+              writes.push([row, col, value])
+            },
+          }),
+        },
+      }
+      expect(() => beta.writeRecord_(ctx, 2, { phone: '+917042524525', city: 'Pune' }, ['', '', 7042524525, ''])).not.toThrow()
+      expect(writes).toEqual([]) // phone is the same number; the refused city cell is left alone
+    })
   })
 
   describe('intro e-mails', () => {

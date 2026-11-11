@@ -148,6 +148,7 @@ function sameValue_(field, a, b) {
   const x = cellToText_(a);
   const y = cellToText_(b);
   if (FLAG_FIELDS.indexOf(field) !== -1) return isYes_(x) === isYes_(y);
+  if (field === 'phone' || field === 'whatsappNumber') return normalizePhone_(x) === normalizePhone_(y);
   if (CASE_INSENSITIVE_FIELDS.indexOf(field) !== -1) return x.toLowerCase() === y.toLowerCase();
   return x === y;
 }
@@ -337,8 +338,13 @@ function writeRecord_(ctx, rowIndex, record, currentValues) {
     const incoming = record[field] === null || record[field] === undefined ? '' : record[field];
     const outgoing = DATE_FIELDS.indexOf(field) !== -1 && incoming ? new Date(incoming) : incoming;
     if (sameValue_(field, values[col], outgoing)) return;
-    ctx.sheet.getRange(rowIndex, col + 1).setValue(outgoing);
-    values[col] = outgoing;
+    try {
+      ctx.sheet.getRange(rowIndex, col + 1).setValue(outgoing);
+      values[col] = outgoing;
+    } catch (e) {
+      // The sheet refused this cell (e.g. a data-validation list or a protected range). Leave it as it is
+      // rather than aborting the sync; the CRM keeps its own value.
+    }
   });
   return rowToFields_(ctx.mapping, values);
 }
@@ -364,8 +370,14 @@ function setupSheet() {
   const finalHeaders = sheet.getRange(CONFIG.HEADER_ROW, 1, 1, width).getValues()[0];
   const mapping = mapHeaders_(finalHeaders, CONFIG.COLUMN_MAP);
   // Phone-like columns as plain text so "+91..." is never turned into a number or formula.
+  const setupWarnings = [];
   ['phone', 'whatsappNumber'].forEach(function (f) {
-    if (mapping[f] !== undefined) sheet.getRange(CONFIG.HEADER_ROW + 1, mapping[f] + 1, sheet.getMaxRows() - CONFIG.HEADER_ROW, 1).setNumberFormat('@');
+    if (mapping[f] === undefined) return;
+    try {
+      sheet.getRange(CONFIG.HEADER_ROW + 1, mapping[f] + 1, sheet.getMaxRows() - CONFIG.HEADER_ROW, 1).setNumberFormat('@');
+    } catch (e) {
+      setupWarnings.push('⚠ Could not set "' + finalHeaders[mapping[f]] + '" to plain text (the column has a data-validation rule). Syncing still works; remove the rule under Data > Data validation if you want to add numbers freely.');
+    }
   });
   const refIdx = finalHeaders.map(normalizeHeader_).indexOf(normalizeHeader_(SPECIAL_HEADERS.EXTERNAL_REF));
   sheet.hideColumns(refIdx + 1);
@@ -376,7 +388,7 @@ function setupSheet() {
   if (mapping.fullName !== undefined) lines.unshift('✔ fullName (split into first + last name)  ←  "' + finalHeaders[mapping.fullName] + '"');
   // Text that merely LOOKS like a date (e.g. "10/12/2026") is ambiguous (US vs day-first), so flag it.
   const dataRows = sheet.getLastRow() - CONFIG.HEADER_ROW;
-  const warnings = [];
+  const warnings = setupWarnings.slice();
   if (dataRows > 0) {
     DATE_FIELDS.forEach(function (f) {
       if (mapping[f] === undefined) return;
