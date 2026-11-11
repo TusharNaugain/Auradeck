@@ -109,6 +109,42 @@ export const POST = routeHandler(async (req: NextRequest) => {
     body.teamId ?? undefined
   )
 
+  // Provision access immediately so the invitee can sign in with Google even when no
+  // email provider is configured (the invitation email may never arrive). The token stays
+  // valid, so the email link still works for setting a password. Existing memberships and
+  // non-ACTIVE existing users are left untouched.
+  const inviteeEmail = body.email.trim().toLowerCase()
+  const provisioned = await db.$transaction(async (tx) => {
+    let invitee = await tx.user.findUnique({ where: { email: inviteeEmail }, select: { id: true, status: true } })
+    let createdUser = false
+    if (!invitee) {
+      const namePart = inviteeEmail.split('@')[0]
+      invitee = await tx.user.create({
+        data: {
+          email: inviteeEmail, fullName: namePart, firstName: namePart, lastName: '',
+          status: 'ACTIVE', emailVerifiedAt: new Date(),
+        },
+        select: { id: true, status: true },
+      })
+      createdUser = true
+    }
+    const existingMembership = await tx.membership.findUnique({
+      where: { userId_organisationId: { userId: invitee.id, organisationId } },
+      select: { id: true },
+    })
+    if (existingMembership || invitee.status !== 'ACTIVE') {
+      return { createdUser, membership: existingMembership ? 'existing' : 'skipped' }
+    }
+    await tx.membership.create({
+      data: {
+        userId: invitee.id, organisationId, roleId: role.id, teamId: body.teamId ?? undefined,
+        status: 'ACTIVE', isPrimary: false, acceptedAt: new Date(), invitedBy: user.id,
+        invitedAt: new Date(), scopeType: 'ORGANISATION',
+      },
+    })
+    return { createdUser, membership: 'created' }
+  })
+
   const acceptUrl = `${appUrl}/accept-invite?token=${raw}`
   await sendTemplatedEmail(
     body.email,
@@ -132,8 +168,8 @@ export const POST = routeHandler(async (req: NextRequest) => {
       success: true,
       data: {
         invitationId,
-        // Local dev convenience: emitted once in logs by the Dev email provider.
-        lifecycle: 'Link sent if email provider is configured; otherwise logged.',
+        access: provisioned.membership,
+        lifecycle: 'Access granted now (sign in with Google using this email). Invitation email is sent only if an email provider is configured.',
       },
       requestId: uuidv4(),
     },
