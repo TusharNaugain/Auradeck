@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { Pencil, Plus } from 'lucide-react'
+import { Pencil, Plus, Trash2 } from 'lucide-react'
 import { PageHeader } from '@/components/shared/page-header'
 import { FilterBar, type FilterSpec } from '@/components/shared/filter-bar'
 import { ListView } from '@/components/shared/list-view'
@@ -36,6 +36,9 @@ export interface ResourceConfig<TRow> {
   filters?: FilterSpec[]
   createPermission?: string
   editPermission?: string
+  /** When set, each row gets a Remove button that calls DELETE `${path}/${id}`. */
+  deletePermission?: string
+  deleteConfirm?: (row: TRow) => string
   rowId?: (row: TRow) => string
   rowLabel?: (row: TRow) => string
 }
@@ -64,8 +67,22 @@ export function ResourcePage<TRow>({
   const hasEditPermission = useHasPermission(config.editPermission ?? '')
   const canCreate = !DEMO_MODE && hasCreatePermission
   const canEdit = !DEMO_MODE && hasEditPermission
+  const hasDeletePermission = useHasPermission(config.deletePermission ?? '')
+  const canDelete = !DEMO_MODE && Boolean(config.deletePermission) && hasDeletePermission
 
   const rowId = config.rowId ?? ((row: TRow) => (row as { id: string }).id)
+
+  async function removeRow(row: TRow) {
+    const message = config.deleteConfirm?.(row) ?? `Remove this ${config.singular}?`
+    if (!window.confirm(message)) return
+    try {
+      await api.delete(`${config.path}/${rowId(row)}`)
+      toast.success(`${config.singular} removed`)
+      invalidate([config.key])
+    } catch (error) {
+      toast.error(errorMessage(error))
+    }
+  }
 
   async function submitCreate(values: Record<string, unknown>) {
     setPending(true)
@@ -134,12 +151,22 @@ export function ResourcePage<TRow>({
         filters={filters}
         pageSize={pageSize}
         actions={
-          editable
+          editable || canDelete
             ? (row) => (
-                <Button variant="ghost" size="sm" onClick={() => { setEditing(row); setFormError('') }}>
-                  <Pencil className="size-4" />
-                  Edit
-                </Button>
+                <div className="flex items-center justify-end gap-1">
+                  {editable && (
+                    <Button variant="ghost" size="sm" onClick={() => { setEditing(row); setFormError('') }}>
+                      <Pencil className="size-4" />
+                      Edit
+                    </Button>
+                  )}
+                  {canDelete && (
+                    <Button variant="ghost" size="sm" className="text-destructive" onClick={() => void removeRow(row)}>
+                      <Trash2 className="size-4" />
+                      Remove
+                    </Button>
+                  )}
+                </div>
               )
             : undefined
         }

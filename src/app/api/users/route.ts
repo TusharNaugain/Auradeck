@@ -119,9 +119,11 @@ export const POST = routeHandler(async (req: NextRequest) => {
     let createdUser = false
     if (!invitee) {
       const namePart = inviteeEmail.split('@')[0]
+      const first = body.firstName?.trim() || namePart
+      const last = body.lastName?.trim() || ''
       invitee = await tx.user.create({
         data: {
-          email: inviteeEmail, fullName: namePart, firstName: namePart, lastName: '',
+          email: inviteeEmail, fullName: `${first} ${last}`.trim(), firstName: first, lastName: last,
           status: 'ACTIVE', emailVerifiedAt: new Date(),
         },
         select: { id: true, status: true },
@@ -130,10 +132,20 @@ export const POST = routeHandler(async (req: NextRequest) => {
     }
     const existingMembership = await tx.membership.findUnique({
       where: { userId_organisationId: { userId: invitee.id, organisationId } },
-      select: { id: true },
+      select: { id: true, status: true },
     })
-    if (existingMembership || invitee.status !== 'ACTIVE') {
-      return { createdUser, membership: existingMembership ? 'existing' : 'skipped' }
+    if (invitee.status !== 'ACTIVE') return { createdUser, membership: 'skipped' }
+    if (existingMembership) {
+      // A previously removed member can be re-invited; anything else is left as it is.
+      if (existingMembership.status !== 'DEACTIVATED') return { createdUser, membership: 'existing' }
+      await tx.membership.update({
+        where: { id: existingMembership.id },
+        data: {
+          status: 'ACTIVE', roleId: role.id, teamId: body.teamId ?? null,
+          deactivatedAt: null, acceptedAt: new Date(), invitedBy: user.id, invitedAt: new Date(),
+        },
+      })
+      return { createdUser, membership: 'reactivated' }
     }
     await tx.membership.create({
       data: {

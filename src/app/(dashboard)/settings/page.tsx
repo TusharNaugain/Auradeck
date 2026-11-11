@@ -487,6 +487,8 @@ const memberConfig: ResourceConfig<MemberRow> = {
   editFields: [],
   createSchema: inviteUserSchema,
   createPermission: 'users.invite',
+  deletePermission: 'users.manage',
+  deleteConfirm: row => `Remove ${row.user.email}? They will lose access to the CRM immediately.`,
 }
 
 interface TeamRow {
