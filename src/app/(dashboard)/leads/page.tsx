@@ -19,6 +19,7 @@ import {
   RefreshCw,
   Search,
   Star,
+  Trash2,
   UserRound,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -224,6 +225,7 @@ export default function LeadsPage() {
   const [createError, setCreateError] = React.useState('')
   const canUpdate = useHasPermission('leads.update')
   const canCreate = useHasPermission('leads.create')
+  const canDelete = useHasPermission('leads.delete')
   const canLogActivity = useHasPermission('activities.create')
   const canManageBilling = useHasPermission('billing.manage')
   const invalidate = useInvalidate()
@@ -301,6 +303,20 @@ export default function LeadsPage() {
       toast.success(isPriority ? 'Marked as priority reachout' : 'Moved to others')
       invalidate(['leads'])
       invalidate(['lead', leadId])
+    } catch (error) {
+      toast.error(errorMessage(error))
+    }
+  }
+
+  async function archiveLead(leadId: string) {
+    const name = detailsQuery.data?.lead.fullName ?? 'this lead'
+    if (!window.confirm(`Archive ${name}? It disappears from the CRM and sheet sync will not bring it back. Its history is kept.`)) return
+    try {
+      await api.delete(`/api/leads/${leadId}`)
+      toast.success('Lead archived')
+      setSelectedId(null)
+      invalidate(['leads'])
+      invalidate(['reports', 'overview'])
     } catch (error) {
       toast.error(errorMessage(error))
     }
@@ -499,6 +515,8 @@ export default function LeadsPage() {
         onOpenChange={(open) => { if (!open) setSelectedId(null) }}
         onStageChange={(stage) => selectedId && void updateStage(selectedId, stage)}
         onTogglePriority={(value) => selectedId && void togglePriority(selectedId, value)}
+        canDelete={canDelete}
+        onArchive={() => selectedId && void archiveLead(selectedId)}
       />
 
       <Dialog open={createOpen} onOpenChange={(open) => { setCreateOpen(open); if (!open) setCreateError('') }}>
@@ -624,6 +642,8 @@ function LeadDetailsSheet({
   onOpenChange,
   onStageChange,
   onTogglePriority,
+  canDelete,
+  onArchive,
 }: {
   lead: LeadDetails | null
   activities: LeadActivity[]
@@ -636,6 +656,8 @@ function LeadDetailsSheet({
   onOpenChange: (open: boolean) => void
   onStageChange: (stage: LeadStage) => void
   onTogglePriority: (isPriority: boolean) => void
+  canDelete: boolean
+  onArchive: () => void
 }) {
   const [followUpDate, setFollowUpDate] = React.useState('')
   const [savingFollowUp, setSavingFollowUp] = React.useState(false)
@@ -948,6 +970,14 @@ function LeadDetailsSheet({
                     </section>
                   )}
                 </>
+              )}
+
+              {canDelete && (
+                <section className="rounded-xl border border-destructive/30 p-4">
+                  <SectionTitle icon={Trash2} title="Remove lead" />
+                  <p className="mt-2 text-xs text-muted-foreground">Archives the lead: it disappears from the CRM and sheet sync will not bring it back. Its history is kept.</p>
+                  <Button variant="outline" size="sm" className="mt-3 text-destructive" onClick={onArchive}>Archive lead</Button>
+                </section>
               )}
 
               {canUpdate && (
