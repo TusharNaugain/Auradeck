@@ -5,7 +5,7 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest'
 import { processPush, pushPayloadSchema, type PushPayload } from '@/lib/sync/lead-sync'
-import { canonicalValue, canonicalizePartial, deriveLeadSource, isPrioritySource, placeholderNameFromEmail } from '@/lib/sync/engine'
+import { canonicalValue, canonicalizePartial, deriveLeadSource, placeholderNameFromEmail } from '@/lib/sync/engine'
 import { FakeStore } from './helpers/fake-sync-store'
 
 const ORG = 'org_1'
@@ -162,20 +162,5 @@ describe('editing the extra columns', () => {
     await processPush(store, ORG, batch([{ rowRef: 'r', leadNumber: lead.leadNumber, fields: { inviteCode: 'AURA-SHEET3' } }]))
     expect(store.leads.get(lead.id)!.record.inviteCode).toBe('AURA-CRM222')
     expect(store.conflicts).toEqual([expect.objectContaining({ field: 'inviteCode', crmValue: 'AURA-CRM222', sheetValue: 'AURA-SHEET3' })])
-  })
-})
-
-describe("isPrioritySource", () => {
-  it("treats sources starting with Hot as priority reachout", () => {
-    expect(isPrioritySource("Hot lead - Survey ")).toBe(true)
-    expect(isPrioritySource("hot lead")).toBe(true)
-    expect(isPrioritySource("  HOT")).toBe(true)
-  })
-  it("leaves everything else as Others", () => {
-    expect(isPrioritySource("Maybe - Survey")).toBe(false)
-    expect(isPrioritySource("hotel enquiry")).toBe(false)
-    expect(isPrioritySource("survey")).toBe(false)
-    expect(isPrioritySource(null)).toBe(false)
-    expect(isPrioritySource(undefined)).toBe(false)
   })
 })

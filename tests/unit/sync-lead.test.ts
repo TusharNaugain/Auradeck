@@ -262,3 +262,20 @@ describe('lead numbers unknown to this CRM', () => {
     expect(res.rows[0].status).toBe('rejected')
   })
 })
+
+describe('priority reachout on creation', () => {
+  const row = (n: number) => ({ rowRef: `r${n}`, externalRef: `ref-priority-${n}`, fields: { email: `p${n}@x.test`, firstName: 'P', lastName: 'Q' } })
+
+  it('a batch with markPriority creates its new leads as priority reachout', async () => {
+    const store = new FakeStore()
+    const result = await processPush(store, 'org', { batchId: 'batch-priority-1', markPriority: true, rows: [row(1), row(2)] })
+    expect(result.summary.created).toBe(2)
+    expect(store.priorityLeads.size).toBe(2)
+  })
+
+  it('a normal batch creates leads as Others (not priority)', async () => {
+    const store = new FakeStore()
+    await processPush(store, 'org', { batchId: 'batch-priority-2', rows: [row(3)] })
+    expect(store.priorityLeads.size).toBe(0)
+  })
+})

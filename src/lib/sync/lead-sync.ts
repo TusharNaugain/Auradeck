@@ -51,7 +51,7 @@ export interface SyncStore {
   /** Returns the lead number of an existing live lead with the same email or phone. */
   findDuplicate(org: string, match: { email: string | null; phone: string | null }, excludeLeadId?: string): Promise<string | null>
   getBase(org: string, leadId: string): Promise<PartialSyncRecord | null>
-  createLead(org: string, input: { record: SyncRecord; externalRef: string }): Promise<LeadSnapshot>
+  createLead(org: string, input: { record: SyncRecord; externalRef: string; isPriority?: boolean }): Promise<LeadSnapshot>
   /** Atomic: update only if `updatedAt` still equals `expectedUpdatedAt`. Returns false when the CRM moved first. */
   updateLead(org: string, input: {
     leadId: string
@@ -70,6 +70,8 @@ export interface SyncStore {
 export const pushPayloadSchema = z.object({
   batchId: z.string().trim().min(8).max(100),
   confirmMassChange: z.boolean().optional(),
+  /** New leads created by this batch start as Priority reachout (set by the early-access sheet only). */
+  markPriority: z.boolean().optional(),
   rows: z
     .array(
       z.object({
@@ -317,7 +319,7 @@ export async function processPush(
 
     if (plan.kind === 'create') {
       try {
-        const lead = await store.createLead(org, { record: plan.record, externalRef: plan.externalRef })
+        const lead = await store.createLead(org, { record: plan.record, externalRef: plan.externalRef, isPriority: payload.markPriority === true })
         add({ rowRef: plan.rowRef, status: 'created', leadNumber: lead.leadNumber, record: lead.record })
       } catch (error) {
         // Nothing was written (create is one transaction); the sender can safely retry.

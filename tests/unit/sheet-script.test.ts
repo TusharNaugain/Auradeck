@@ -320,3 +320,56 @@ describe('sheet script: Beta Tracker configuration (BetaTracker.gs)', () => {
     })
   })
 })
+
+describe('sheet script: Therapist Referral Circle configuration (TherapistReferral.gs)', () => {
+  const load = (file: string) => {
+    const ctx = createContext({ Utilities, console })
+    new Script(readFileSync(path.resolve(process.cwd(), file), 'utf8')).runInContext(ctx)
+    return runInContext('({ CONFIG, mapHeaders_, rowToFields_, withDefaults_, normalizePhone_ })', ctx) as {
+      CONFIG: { SHEET_NAME: string; COLUMN_MAP: Record<string, string>; MARK_PRIORITY: boolean; NEW_ROW_DEFAULTS: Record<string, string> }
+      mapHeaders_: (h: unknown[], m?: Record<string, string>) => Record<string, number>
+      rowToFields_: (m: Record<string, number>, r: unknown[]) => Record<string, string>
+      withDefaults_: (f: Record<string, string>) => Record<string, string>
+      normalizePhone_: (v: string) => string
+    }
+  }
+  const referral = load('docs/sheet-sync/TherapistReferral.gs')
+  const headers = [
+    'Timestamp', 'Email Address', '1. Full Name', '2. Professional Title / Role', 'City / Location',
+    'Specialisations / Areas of expertise', 'Preferred contact number for referrals', 'Years in experience ', "What's app invite ",
+  ]
+  const mapping = referral.mapHeaders_(headers, referral.CONFIG.COLUMN_MAP)
+
+  it('targets the form tab and maps the form columns (ignoring years and the WhatsApp invite)', () => {
+    expect(referral.CONFIG.SHEET_NAME).toBe('Form Responses 1')
+    expect(mapping).toEqual({ signedUpAt: 0, email: 1, fullName: 2, jobTitle: 3, city: 4, useCase: 5, phone: 6 })
+  })
+
+  it('turns a form row into fields the CRM accepts', () => {
+    const fields = referral.rowToFields_(mapping, [new Date('2026-10-05T09:03:13Z'), 'jvarnika521@gmail.com', 'Varnika Jain', 'Counselling Psychologist', 'Bangalore ', 'Trauma informed', 6397077475, '', 'Message Varnika'])
+    expect(fields).toMatchObject({
+      email: 'jvarnika521@gmail.com', firstName: 'Varnika', lastName: 'Jain', jobTitle: 'Counselling Psychologist',
+      city: 'Bangalore', useCase: 'Trauma informed', phone: '+916397077475', signedUpAt: '2026-10-05T09:03:13.000Z',
+    })
+    expect(validateValues(canonicalizePartial(fields))).toEqual([])
+  })
+
+  it('drops a phone that is not a valid number instead of rejecting the whole row', () => {
+    expect(referral.normalizePhone_('98716 77204 / 98111 22233')).toBe('')
+    expect(referral.normalizePhone_('12345')).toBe('')
+    expect(referral.normalizePhone_('9871677204')).toBe('+919871677204')
+    const fields = referral.rowToFields_(mapping, ['', 'a@b.co', 'A B', '', '', '', 'call me', '', ''])
+    expect(validateValues(canonicalizePartial(fields))).toEqual([])
+  })
+
+  it('gives NEW rows the referral source, but leaves an existing value alone', () => {
+    expect(referral.withDefaults_({ email: 'a@b.co' })).toMatchObject({ leadSource: 'referral', waitlistSource: 'Therapist Referral Circle' })
+    expect(referral.withDefaults_({ email: 'a@b.co', leadSource: 'website' }).leadSource).toBe('website')
+  })
+
+  it('only the early-access script (Code.gs) marks new leads as priority reachout', () => {
+    expect(referral.CONFIG.MARK_PRIORITY).toBe(false)
+    expect(load('docs/sheet-sync/BetaTracker.gs').CONFIG.MARK_PRIORITY).toBe(false)
+    expect(load('docs/sheet-sync/Code.gs').CONFIG.MARK_PRIORITY).toBe(true)
+  })
+})

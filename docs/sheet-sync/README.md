@@ -140,9 +140,22 @@ Script properties `CRM_BASE_URL` and `SYNC_SHARED_SECRET`, then **CRM Sync > Set
 
 - `Name` is split into first + last name (a blank name is never sent, so it cannot clear a CRM name).
 - `Phone / WhatsApp` -> phone; bare 10-digit numbers become `+91...` (`CONFIG.PHONE_COUNTRY_CODE`).
-- `Lead Source` -> the free-text source (`waitlistSource`). A new lead whose source starts with "Hot" starts as **Priority reachout**.
+- `Lead Source` -> the free-text source (`waitlistSource`), kept as-is.
 - `Notes` -> pain points, `Clinic / Solo` -> use case. Other columns (status, dates, tier, MRR) are not synced.
 - A new row's External Ref is `beta-tracker-<email>` (`CONFIG.REF_PREFIX`), the same one used for the one-time import, so the
   first sync links existing rows to their `LD-` numbers instead of rejecting them. A row whose email/phone already belongs to a
   lead from another sheet shows *REJECTED: Duplicate of LD-...*; type that number into *CRM Lead Number* to link it.
+
+## Priority reachout
+
+Only people in the **early-access sheet** are Priority reachout. That sheet's script (`Code.gs`) has `CONFIG.MARK_PRIORITY: true`, so
+every lead it creates starts as priority. `BetaTracker.gs` and `TherapistReferral.gs` have it `false`, so their leads start as Others.
+The star on a lead (Leads page) can still change it by hand. It only applies when a lead is first created.
+
+## Therapist Referral Circle sheet ([TherapistReferral.gs](./TherapistReferral.gs))
+
+Same installation as the Beta Tracker script, for the form sheet's **Form Responses 1** tab: Email Address, 1. Full Name (split into first
+and last name), 2. Professional Title / Role -> job title, City / Location, Specialisations -> use case, Preferred contact number -> phone
+(bare 10-digit numbers get `+91`; a number that is still not valid is left out and the lead is created from its email), Timestamp -> signed
+up. New leads get source *referral* and the text "Therapist Referral Circle". It never sends e-mail.
 

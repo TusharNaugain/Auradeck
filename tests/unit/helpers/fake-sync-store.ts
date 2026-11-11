@@ -11,6 +11,7 @@ export class FakeStore implements SyncStore {
   conflicts: Array<FieldConflict & { leadId: string }> = []
   rejected: Array<{ rowRef: string; reason: string }> = []
   audit: string[] = []
+  priorityLeads = new Set<string>()
   private tick = 0
   private seq = 0
   failNextUpdate = false
@@ -54,8 +55,9 @@ export class FakeStore implements SyncStore {
     return hit?.leadNumber ?? null
   }
   async getBase(_o: string, id: string) { return this.bases.get(id) ?? null }
-  async createLead(_o: string, { record, externalRef }: { record: SyncRecord; externalRef: string }) {
+  async createLead(_o: string, { record, externalRef, isPriority }: { record: SyncRecord; externalRef: string; isPriority?: boolean }) {
     const lead = this.seed(record)
+    if (isPriority) this.priorityLeads.add(lead.id)
     this.externalRefs.set(externalRef, lead.id)
     this.bases.set(lead.id, record)
     this.audit.push(`create:${lead.leadNumber}`)

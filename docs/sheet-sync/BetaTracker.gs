@@ -30,7 +30,7 @@ const CONFIG = {
   COLUMN_MAP: {
     'Name': 'fullName',                 // split into first + last name
     'Phone / WhatsApp': 'phone',
-    'Lead Source': 'waitlistSource',    // free text like "Hot lead - Survey"; a "Hot..." source starts as Priority reachout
+    'Lead Source': 'waitlistSource',    // free text like "Hot lead - Survey", kept as-is
     'Notes': 'painPoints',
     'Clinic / Solo': 'useCase',
     'Trial Start Date': 'ignore',       // dd.mm.yy text, not a real date: left out
@@ -40,6 +40,13 @@ const CONFIG = {
   REF_PREFIX: 'beta-tracker-',
   // Optional, e.g. '91'. A bare 10-digit phone number is sent as +<code><number> so it matches the CRM's format.
   PHONE_COUNTRY_CODE: '91',
+  // Optional. true: a phone that is still not a valid number after the country code was added is left out
+  // (the lead is still created from its email) instead of the whole row being rejected.
+  DROP_INVALID_PHONE: true,
+  // true only in the EARLY-ACCESS sheet's script: leads it creates start as Priority reachout.
+  MARK_PRIORITY: false, // only the early-access sheet's script marks new leads as priority
+  // Optional values for NEW rows only, for fields that have no column in the sheet, e.g. { leadSource: 'referral' }.
+  NEW_ROW_DEFAULTS: {},
 };
 
 const SPECIAL_HEADERS = {
@@ -185,7 +192,17 @@ function normalizePhone_(text) {
   if (!code || !compact) return text;
   if (/^\d{10}$/.test(compact)) return '+' + code + compact;
   if (compact.indexOf(code) === 0 && /^\d{10}$/.test(compact.slice(code.length))) return '+' + compact;
+  if (CONFIG.DROP_INVALID_PHONE && !/^\+?[1-9]\d{7,14}$/.test(compact)) return '';
   return text;
+}
+
+/** Values for fields the sheet has no column for, applied to NEW rows only (never to a lead that already exists). */
+function withDefaults_(fields) {
+  const out = Object.assign({}, fields);
+  Object.keys(CONFIG.NEW_ROW_DEFAULTS).forEach(function (k) {
+    if (out[k] === undefined || out[k] === '') out[k] = CONFIG.NEW_ROW_DEFAULTS[k];
+  });
+  return out;
 }
 
 /** Permanent External Ref for a new row: PREFIX + email when configured, otherwise a random id. */
@@ -484,8 +501,9 @@ function pushPhase_(ctx, state, summary, confirmMassChange) {
     const body = {
       batchId: Utilities.getUuid(),
       confirmMassChange: confirmMassChange === true,
+      markPriority: CONFIG.MARK_PRIORITY === true,
       rows: chunk.map(function (r) {
-        const row = { rowRef: r.key, fields: r.fields };
+        const row = { rowRef: r.key, fields: r.leadNumber ? r.fields : withDefaults_(r.fields) };
         // Send both when present: if the CRM does not know this lead number (e.g. the sheet was
         // synced to another database before), the stable externalRef lets it re-create the lead.
         if (r.leadNumber) row.leadNumber = r.leadNumber;
