@@ -18,6 +18,7 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Star,
   UserRound,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -92,6 +93,7 @@ type LeadSummary = {
   leadSource: string
   lifecycleStage: LeadStage
   leadScore: number
+  isPriority: boolean
   assignedToUserId: string | null
   assignedTo: { id: string; fullName: string } | null
   nextFollowUpAt: string | null
@@ -163,6 +165,8 @@ type LeadListResponse = {
   pageSize: number
   totalPages: number
   stageCounts: { stage: LeadStage; count: number }[]
+  priorityCount: number
+  othersCount: number
 }
 
 type LeadDetailsResponse = { lead: LeadDetails; activities: LeadActivity[] }
@@ -194,6 +198,12 @@ function customFieldValue(key: string, value: unknown): string {
   return typeof value === 'object' ? JSON.stringify(value) : String(value)
 }
 
+const PRIORITY_VIEWS = [
+  { value: 'all', label: 'All leads', style: '' },
+  { value: 'priority', label: 'Priority reachout', style: 'data-[active=true]:border-amber-500 data-[active=true]:bg-amber-100 data-[active=true]:text-amber-900 dark:data-[active=true]:bg-amber-500/20 dark:data-[active=true]:text-amber-200' },
+  { value: 'others', label: 'Others', style: 'data-[active=true]:border-slate-400 data-[active=true]:bg-slate-100 data-[active=true]:text-slate-800 dark:data-[active=true]:bg-slate-500/20 dark:data-[active=true]:text-slate-200' },
+] as const
+
 const PIPELINE_TABS = [
   { value: 'all', label: 'All leads' },
   { value: 'active', label: 'Active pipeline' },
@@ -206,6 +216,7 @@ export default function LeadsPage() {
   const [searchInput, setSearchInput] = React.useState('')
   const [search, setSearch] = React.useState('')
   const [source, setSource] = React.useState('all')
+  const [priority, setPriority] = React.useState<'all' | 'priority' | 'others'>('all')
   const [page, setPage] = React.useState(1)
   const [selectedId, setSelectedId] = React.useState<string | null>(null)
   const [createOpen, setCreateOpen] = React.useState(false)
@@ -224,12 +235,13 @@ export default function LeadsPage() {
     return () => window.clearTimeout(timer)
   }, [searchInput])
   const leadsQuery = useQuery({
-    queryKey: ['leads', 'pipeline', { page, search, source }],
+    queryKey: ['leads', 'pipeline', { page, search, source, priority }],
     queryFn: () => api.get<LeadListResponse>('/api/leads', {
       page,
       pageSize: 100,
       search,
       source: source === 'all' ? undefined : source,
+      priority: priority === 'all' ? undefined : priority,
     }),
     placeholderData: keepPreviousData,
   })
@@ -247,7 +259,8 @@ export default function LeadsPage() {
       if (tab === 'converted') return lead.lifecycleStage === 'CONVERTED'
       if (tab === 'closed') return ['LOST', 'DISQUALIFIED'].includes(lead.lifecycleStage)
       return true
-    })
+    // Priority leads float to the top of each column; the sort is stable, so order is otherwise unchanged.
+    }).sort((a, b) => Number(b.isPriority) - Number(a.isPriority))
   }, [leadsQuery.data?.items, tab])
   const sources = leadSource.options.filter((s) => s !== 'whatsapp')
   const allCount = leadsQuery.data?.total ?? 0
@@ -279,6 +292,17 @@ export default function LeadsPage() {
     } catch (error) {
       toast.error(errorMessage(error))
       if (error instanceof ApiError && error.status === 403) invalidate(['session'])
+    }
+  }
+
+  async function togglePriority(leadId: string, isPriority: boolean) {
+    try {
+      await api.patch(`/api/leads/${leadId}`, { isPriority })
+      toast.success(isPriority ? 'Marked as priority reachout' : 'Moved to others')
+      invalidate(['leads'])
+      invalidate(['lead', leadId])
+    } catch (error) {
+      toast.error(errorMessage(error))
     }
   }
 
@@ -328,6 +352,26 @@ export default function LeadsPage() {
           </TabsList>
         </Tabs>
         <div className="flex flex-col gap-2 sm:flex-row">
+          <div role="group" aria-label="Priority view" className="flex gap-1 rounded-lg bg-muted/50 p-1">
+            {PRIORITY_VIEWS.map((view) => {
+              const count = view.value === 'all' ? (leadsQuery.data?.priorityCount ?? 0) + (leadsQuery.data?.othersCount ?? 0)
+                : view.value === 'priority' ? leadsQuery.data?.priorityCount : leadsQuery.data?.othersCount
+              return (
+                <button
+                  key={view.value}
+                  type="button"
+                  data-active={priority === view.value}
+                  aria-pressed={priority === view.value}
+                  onClick={() => { setPriority(view.value); setPage(1) }}
+                  className={cn('inline-flex items-center gap-1.5 rounded-md border border-transparent px-2.5 py-1 text-xs font-medium text-muted-foreground transition data-[active=true]:bg-background data-[active=true]:text-foreground', view.style)}
+                >
+                  {view.value === 'priority' && <Star className="size-3.5 fill-amber-500 text-amber-500" />}
+                  {view.label}
+                  <span className="rounded-full bg-background/70 px-1.5 text-[10px] tabular-nums">{count ?? 0}</span>
+                </button>
+              )
+            })}
+          </div>
           <label className="relative min-w-0 flex-1 sm:w-64">
             <Search aria-hidden="true" className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input value={searchInput} onChange={(event) => setSearchInput(event.target.value)} placeholder="Search leads…" className="pl-9" />
@@ -409,6 +453,7 @@ export default function LeadsPage() {
                         canUpdate={canUpdate}
                         onOpen={() => setSelectedId(lead.id)}
                         onStageChange={(newStage) => void updateStage(lead.id, newStage)}
+                        onTogglePriority={() => void togglePriority(lead.id, !lead.isPriority)}
                       />
                     ))
                   )}
@@ -453,6 +498,7 @@ export default function LeadsPage() {
         canManageBilling={canManageBilling}
         onOpenChange={(open) => { if (!open) setSelectedId(null) }}
         onStageChange={(stage) => selectedId && void updateStage(selectedId, stage)}
+        onTogglePriority={(value) => selectedId && void togglePriority(selectedId, value)}
       />
 
       <Dialog open={createOpen} onOpenChange={(open) => { setCreateOpen(open); if (!open) setCreateError('') }}>
@@ -480,11 +526,13 @@ function LeadCard({
   canUpdate,
   onOpen,
   onStageChange,
+  onTogglePriority,
 }: {
   lead: LeadSummary
   canUpdate: boolean
   onOpen: () => void
   onStageChange: (stage: LeadStage) => void
+  onTogglePriority: () => void
 }) {
   return (
     <Card
@@ -497,7 +545,12 @@ function LeadCard({
           onOpen()
         }
       }}
-      className="cursor-pointer border-border/70 bg-card transition hover:border-primary/40 hover:shadow-md"
+      className={cn(
+        'cursor-pointer transition hover:shadow-md',
+        lead.isPriority
+          ? 'border-amber-300 border-l-4 border-l-amber-500 bg-amber-50 hover:border-amber-400 dark:border-amber-500/40 dark:border-l-amber-500 dark:bg-amber-500/10'
+          : 'border-border/70 bg-card hover:border-primary/40'
+      )}
     >
       <CardContent className="space-y-3 p-3.5">
         <div className="flex items-start justify-between gap-2">
@@ -505,9 +558,24 @@ function LeadCard({
             <p className="truncate text-sm font-semibold">{lead.fullName}</p>
             <p className="mt-0.5 truncate text-xs text-muted-foreground">{lead.organisationName || lead.leadNumber}</p>
           </div>
-          <Badge variant={lead.leadScore >= 70 ? 'success' : lead.leadScore >= 40 ? 'warning' : 'secondary'} className="shrink-0">
-            {lead.leadScore}
-          </Badge>
+          <div className="flex shrink-0 items-center gap-1.5">
+            {canUpdate ? (
+              <button
+                type="button"
+                aria-label={lead.isPriority ? `Remove ${lead.fullName} from priority reachout` : `Mark ${lead.fullName} as priority reachout`}
+                aria-pressed={lead.isPriority}
+                title={lead.isPriority ? 'Priority reachout (click to move to Others)' : 'Mark as priority reachout'}
+                onClick={(event) => { event.stopPropagation(); onTogglePriority() }}
+                onKeyDown={(event) => event.stopPropagation()}
+                className="rounded p-0.5 hover:bg-amber-100 dark:hover:bg-amber-500/20"
+              >
+                <Star className={cn('size-4', lead.isPriority ? 'fill-amber-500 text-amber-500' : 'text-muted-foreground')} />
+              </button>
+            ) : lead.isPriority && <Star aria-label="Priority reachout" className="size-4 fill-amber-500 text-amber-500" />}
+            <Badge variant={lead.leadScore >= 70 ? 'success' : lead.leadScore >= 40 ? 'warning' : 'secondary'}>
+              {lead.leadScore}
+            </Badge>
+          </div>
         </div>
         <div className="flex flex-wrap gap-1.5">
           <Badge variant="outline" className="font-normal">{enumLabel(lead.leadSource)}</Badge>
@@ -555,6 +623,7 @@ function LeadDetailsSheet({
   canManageBilling,
   onOpenChange,
   onStageChange,
+  onTogglePriority,
 }: {
   lead: LeadDetails | null
   activities: LeadActivity[]
@@ -566,6 +635,7 @@ function LeadDetailsSheet({
   canManageBilling: boolean
   onOpenChange: (open: boolean) => void
   onStageChange: (stage: LeadStage) => void
+  onTogglePriority: (isPriority: boolean) => void
 }) {
   const [followUpDate, setFollowUpDate] = React.useState('')
   const [savingFollowUp, setSavingFollowUp] = React.useState(false)
@@ -700,12 +770,19 @@ function LeadDetailsSheet({
               <div className="flex flex-wrap items-center gap-2">
                 <SheetTitle className="text-xl">{lead.fullName}</SheetTitle>
                 <Badge variant="outline">{enumLabel(lead.lifecycleStage)}</Badge>
+                {lead.isPriority && <Badge className="border-amber-300 bg-amber-100 text-amber-900 hover:bg-amber-100 dark:bg-amber-500/20 dark:text-amber-200"><Star className="mr-1 size-3 fill-amber-500 text-amber-500" />Priority reachout</Badge>}
               </div>
               <SheetDescription>{lead.organisationName || lead.leadNumber} · Added {formatDate(lead.createdAt)}</SheetDescription>
               <div className="flex flex-wrap gap-2 pt-2">
                 <Badge variant={lead.leadScore >= 70 ? 'success' : lead.leadScore >= 40 ? 'warning' : 'secondary'}>Score {lead.leadScore}</Badge>
                 <Badge variant="outline">{enumLabel(lead.leadSource)}</Badge>
                 {lead.assignedTo && <Badge variant="secondary"><UserRound className="mr-1 size-3" />{lead.assignedTo.fullName}</Badge>}
+                {canUpdate && (
+                  <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => onTogglePriority(!lead.isPriority)}>
+                    <Star className={cn('mr-1 size-3', lead.isPriority && 'fill-amber-500 text-amber-500')} />
+                    {lead.isPriority ? 'Move to Others' : 'Mark as priority'}
+                  </Button>
+                )}
               </div>
             </SheetHeader>
 

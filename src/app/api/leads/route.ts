@@ -33,7 +33,7 @@ export const GET = routeHandler(async (req: NextRequest) => {
   ])
 
   const recordScope = await resolveLeadScope(organisationId, ctx.scopeType, user.id, ctx.teamId)
-  const where: Prisma.LeadWhereInput = {
+  const baseWhere: Prisma.LeadWhereInput = {
     AND: [
       { organisationId, deletedAt: null },
       recordScope,
@@ -53,9 +53,13 @@ export const GET = routeHandler(async (req: NextRequest) => {
       ...(searchOr ? [{ OR: searchOr }] : []),
     ],
   }
+  // Priority counts ignore the priority filter itself so both tabs always show their totals.
+  const where: Prisma.LeadWhereInput = query.priority
+    ? { AND: [baseWhere, { isPriority: query.priority === 'priority' }] }
+    : baseWhere
 
   const orderBy = { [query.sortBy]: query.sort as 'asc' | 'desc' }
-  const [items, total, stages] = await Promise.all([
+  const [items, total, stages, priorityGroups] = await Promise.all([
     db.lead.findMany({
       where,
       orderBy,
@@ -64,7 +68,7 @@ export const GET = routeHandler(async (req: NextRequest) => {
       select: {
         id: true, leadNumber: true, fullName: true, email: true,
         organisationName: true, leadSource: true, lifecycleStage: true,
-        leadScore: true, assignedToUserId: true, nextFollowUpAt: true,
+        leadScore: true, isPriority: true, assignedToUserId: true, nextFollowUpAt: true,
         createdAt: true, city: true, state: true, tags: true, phoneNumber: true,
         whatsappNumber: true, lastContactedAt: true, firstContactedAt: true,
         assignedTo: { select: { id: true, fullName: true } },
@@ -72,7 +76,9 @@ export const GET = routeHandler(async (req: NextRequest) => {
     }),
     db.lead.count({ where }),
     db.lead.groupBy({ by: ['lifecycleStage'], where, _count: true }),
+    db.lead.groupBy({ by: ['isPriority'], where: baseWhere, _count: true }),
   ])
+  const priorityCount = priorityGroups.find(g => g.isPriority)?._count ?? 0
 
   return NextResponse.json(
     {
@@ -84,6 +90,8 @@ export const GET = routeHandler(async (req: NextRequest) => {
         pageSize: query.pageSize,
         totalPages: Math.ceil(total / query.pageSize),
         stageCounts: stages.map(({ lifecycleStage, _count }) => ({ stage: lifecycleStage, count: _count })),
+        priorityCount,
+        othersCount: priorityGroups.reduce((n, g) => n + g._count, 0) - priorityCount,
       },
       requestId: uuidv4(),
     },

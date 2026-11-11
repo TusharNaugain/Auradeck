@@ -115,7 +115,7 @@ export const PATCH = routeHandler(async (req: NextRequest, context: RouteContext
 
   const lead = await db.lead.findFirst({
     where: { AND: [{ id, organisationId, deletedAt: null }, recordScope] },
-    select: { id: true, leadNumber: true, lifecycleStage: true },
+    select: { id: true, leadNumber: true, lifecycleStage: true, isPriority: true },
   })
   if (!lead) throw new NotFoundError('Lead not found')
 
@@ -124,7 +124,7 @@ export const PATCH = routeHandler(async (req: NextRequest, context: RouteContext
     throw new ValidationFailedError('Use the lead conversion action to convert a lead')
   }
 
-  const before = { lifecycleStage: lead.lifecycleStage }
+  const before = { lifecycleStage: lead.lifecycleStage, isPriority: lead.isPriority }
   const updated = await db.$transaction(async (tx) => {
     const updatedLead = await tx.lead.update({
       where: { id: lead.id },
@@ -161,6 +161,7 @@ export const PATCH = routeHandler(async (req: NextRequest, context: RouteContext
         ...(body.tags ? { tags: body.tags } : {}),
         ...(body.customFields ? { customFields: body.customFields } : {}),
         ...(body.lifecycleStage ? { lifecycleStage: body.lifecycleStage.toUpperCase() as never } : {}),
+        ...(body.isPriority !== undefined ? { isPriority: body.isPriority } : {}),
       },
     })
     if (
@@ -193,7 +194,7 @@ export const PATCH = routeHandler(async (req: NextRequest, context: RouteContext
     resourceType: 'lead',
     resourceId: lead.id,
     beforeJson: before,
-    afterJson: { lifecycleStage: updated.lifecycleStage },
+    afterJson: { lifecycleStage: updated.lifecycleStage, isPriority: updated.isPriority },
     ipHash,
     userAgentHash,
   })

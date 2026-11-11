@@ -662,6 +662,7 @@ model Lead {
   campaignId              String?
   lifecycleStage          LeadLifecycleStage @default(NEW)
   leadScore               Int                @default(0)
+  isPriority              Boolean            @default(false)
   qualificationStatus     String?
   estimatedPracticeSize   String?
   estimatedUsers          Int?
@@ -699,6 +700,7 @@ model Lead {
 
   @@unique([organisationId, leadNumber])
   @@index([organisationId])
+  @@index([organisationId, isPriority])
   @@index([lifecycleStage])
   @@index([assignedToUserId])
   @@index([nextFollowUpAt])

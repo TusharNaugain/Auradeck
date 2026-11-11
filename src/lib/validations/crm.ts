@@ -66,11 +66,13 @@ export const leadCreateSchema = leadCreateObject.superRefine((data, ctx) => {
 
 export const leadUpdateSchema = leadCreateObject.partial().extend({
   lifecycleStage: leadLifecycleStage.optional(),
+  isPriority: z.boolean().optional(),
 })
 export const leadListSchema = paginationSchema.extend({
   search: z.string().trim().max(200).optional(),
   source: leadSource.optional(),
   stage: leadLifecycleStage.optional(),
+  priority: z.enum(['priority', 'others']).optional(),
   assignedToUserId: z.string().optional(),
   assignedTeamId: z.string().optional(),
   tags: z.string().optional(), // comma-separated

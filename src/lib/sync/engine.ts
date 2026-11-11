@@ -131,6 +131,9 @@ export function deriveLeadSource(waitlistSource: string | null | undefined): str
   return 'other'
 }
 
+/** A sheet source that starts with "Hot" ("Hot lead - Survey") starts as a priority reachout when the lead is created. */
+export const isPrioritySource = (waitlistSource: string | null | undefined): boolean => /^\s*hot\b/i.test(waitlistSource ?? '')
+
 /** Temporary display name for a lead whose only identifier is an email address. */
 export function placeholderNameFromEmail(email: string | null | undefined): string | null {
   const local = (email ?? '').split('@')[0]?.trim()

@@ -11,6 +11,7 @@ import { computeLeadScore, findLeadDuplicate } from '@/lib/services/leads'
 import {
   CUSTOM_FIELDS,
   canonicalizeFull,
+  isPrioritySource,
   type FieldConflict,
   type PartialSyncRecord,
   type SyncRecord,
@@ -176,6 +177,7 @@ export function createPrismaSyncStore(): SyncStore {
               organisationId: org,
               leadNumber,
               leadScore: score,
+              isPriority: isPrioritySource(record.waitlistSource),
               customFields: toJson(mergeCustom({}, customPatch(record))),
               ...(record.lifecycleStage !== 'new' ? { firstContactedAt: new Date() } : {}),
               fullName: [record.firstName, record.lastName].filter(Boolean).join(' '),
