@@ -227,3 +227,6 @@ export async function convertLead(input: ConversionInput): Promise<ConversionRes
     { isolationLevel: 'Serializable', timeout: 15_000 }
   )
 }
+
+/** Leads in these stages are "dead": hidden from the board and the dashboard, shown only in the Dead view. */
+export const DEAD_LEAD_STAGES = ['LOST', 'DISQUALIFIED'] as const

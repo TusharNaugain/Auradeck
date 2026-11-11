@@ -73,6 +73,8 @@ export const leadListSchema = paginationSchema.extend({
   source: leadSource.optional(),
   stage: leadLifecycleStage.optional(),
   priority: z.enum(['priority', 'others']).optional(),
+  /** Default (omitted) hides dead leads; 'dead' shows only them. An explicit `stage` wins over both. */
+  view: z.enum(['active', 'dead']).optional(),
   assignedToUserId: z.string().optional(),
   assignedTeamId: z.string().optional(),
   tags: z.string().optional(), // comma-separated

@@ -12,6 +12,7 @@ import { leadScope as getLeadScope, opportunityScope as getOpportunityScope } fr
 import { computeWeightedAmount } from '@/lib/validations/crm'
 import { computeSlaStatus } from '@/lib/validations/support'
 import { v4 as uuidv4 } from 'uuid'
+import { DEAD_LEAD_STAGES } from '@/lib/services/leads'
 
 export const GET = routeHandler(async (req: NextRequest) => {
   const guard = await guardedRoute(req, { permission: PERMISSIONS.DASHBOARD_VIEW, policy: 'apiRead', keyByUser: true })
@@ -67,12 +68,12 @@ export const GET = routeHandler(async (req: NextRequest) => {
         followupsDue,
         overdueFollowups,
       ] = await Promise.all([
-        canViewLeads ? db.lead.count({ where: { organisationId, deletedAt: null, ...leadRecordScope } }) : Promise.resolve(0),
-        canViewLeads ? db.lead.count({ where: { organisationId, createdAt: { gte: startOfToday }, deletedAt: null, ...leadRecordScope } }) : Promise.resolve(0),
-        canViewLeads ? db.lead.count({ where: { organisationId, createdAt: { gte: sinceDays(7) }, deletedAt: null, ...leadRecordScope } }) : Promise.resolve(0),
-        canViewLeads ? db.lead.count({ where: { organisationId, createdAt: { gte: startOfMonth }, deletedAt: null, ...leadRecordScope } }) : Promise.resolve(0),
-        canViewLeads ? db.lead.groupBy({ by: ['lifecycleStage'], where: { organisationId, deletedAt: null, ...leadRecordScope }, _count: true }) : Promise.resolve([]),
-        canViewLeads ? db.lead.groupBy({ by: ['leadSource'], where: { organisationId, deletedAt: null, ...leadRecordScope }, _count: true }) : Promise.resolve([]),
+        canViewLeads ? db.lead.count({ where: { organisationId, deletedAt: null, lifecycleStage: { notIn: [...DEAD_LEAD_STAGES] }, ...leadRecordScope } }) : Promise.resolve(0),
+        canViewLeads ? db.lead.count({ where: { organisationId, createdAt: { gte: startOfToday }, deletedAt: null, lifecycleStage: { notIn: [...DEAD_LEAD_STAGES] }, ...leadRecordScope } }) : Promise.resolve(0),
+        canViewLeads ? db.lead.count({ where: { organisationId, createdAt: { gte: sinceDays(7) }, deletedAt: null, lifecycleStage: { notIn: [...DEAD_LEAD_STAGES] }, ...leadRecordScope } }) : Promise.resolve(0),
+        canViewLeads ? db.lead.count({ where: { organisationId, createdAt: { gte: startOfMonth }, deletedAt: null, lifecycleStage: { notIn: [...DEAD_LEAD_STAGES] }, ...leadRecordScope } }) : Promise.resolve(0),
+        canViewLeads ? db.lead.groupBy({ by: ['lifecycleStage'], where: { organisationId, deletedAt: null, lifecycleStage: { notIn: [...DEAD_LEAD_STAGES] }, ...leadRecordScope }, _count: true }) : Promise.resolve([]),
+        canViewLeads ? db.lead.groupBy({ by: ['leadSource'], where: { organisationId, deletedAt: null, lifecycleStage: { notIn: [...DEAD_LEAD_STAGES] }, ...leadRecordScope }, _count: true }) : Promise.resolve([]),
         canViewOpportunities ? db.opportunity.findMany({
           where: {
             organisationId,
@@ -110,7 +111,7 @@ export const GET = routeHandler(async (req: NextRequest) => {
           _count: true,
           _sum: { amount: true },
         }) : Promise.resolve([]),
-        canViewLeads ? db.lead.count({ where: { organisationId, nextFollowUpAt: { gte: startOfToday, lte: days(1) }, deletedAt: null, ...leadRecordScope } }) : Promise.resolve(0),
+        canViewLeads ? db.lead.count({ where: { organisationId, nextFollowUpAt: { gte: startOfToday, lte: days(1) }, deletedAt: null, lifecycleStage: { notIn: [...DEAD_LEAD_STAGES] }, ...leadRecordScope } }) : Promise.resolve(0),
         canViewLeads ? db.lead.count({ where: { organisationId, nextFollowUpAt: { lt: startOfToday }, lifecycleStage: { notIn: ['CONVERTED', 'LOST', 'DISQUALIFIED'] }, deletedAt: null, ...leadRecordScope } }) : Promise.resolve(0),
       ])
 

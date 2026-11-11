@@ -11,7 +11,7 @@ import { routeHandler } from '@/lib/utils/api-helpers'
 import { leadListSchema, leadCreateSchema } from '@/lib/validations/crm'
 import { searchTerm } from '@/lib/utils/list'
 import { nextNumber } from '@/lib/services/numbering'
-import { findLeadDuplicate, computeLeadScore } from '@/lib/services/leads'
+import { findLeadDuplicate, computeLeadScore, DEAD_LEAD_STAGES } from '@/lib/services/leads'
 import { createAuditLog } from '@/lib/audit'
 import { ConflictError } from '@/lib/services/errors'
 import { PERMISSIONS } from '@/lib/permissions'
@@ -33,7 +33,7 @@ export const GET = routeHandler(async (req: NextRequest) => {
   ])
 
   const recordScope = await resolveLeadScope(organisationId, ctx.scopeType, user.id, ctx.teamId)
-  const baseWhere: Prisma.LeadWhereInput = {
+  const filtersWhere: Prisma.LeadWhereInput = {
     AND: [
       { organisationId, deletedAt: null },
       recordScope,
@@ -53,10 +53,13 @@ export const GET = routeHandler(async (req: NextRequest) => {
       ...(searchOr ? [{ OR: searchOr }] : []),
     ],
   }
-  // Priority counts ignore the priority filter itself so both tabs always show their totals.
-  const where: Prisma.LeadWhereInput = query.priority
-    ? { AND: [baseWhere, { isPriority: query.priority === 'priority' }] }
-    : baseWhere
+  // Dead leads (lost / disqualified) are hidden unless the Dead view or an explicit stage is requested.
+  const dead = [...DEAD_LEAD_STAGES]
+  const scope: Prisma.LeadWhereInput = query.stage ? {} : { lifecycleStage: query.view === 'dead' ? { in: dead } : { notIn: dead } }
+  const filtered: Prisma.LeadWhereInput = query.priority
+    ? { AND: [filtersWhere, { isPriority: query.priority === 'priority' }] }
+    : filtersWhere
+  const where: Prisma.LeadWhereInput = { AND: [filtered, scope] }
 
   const orderBy = { [query.sortBy]: query.sort as 'asc' | 'desc' }
   const [items, total, stages, priorityGroups] = await Promise.all([
@@ -75,8 +78,10 @@ export const GET = routeHandler(async (req: NextRequest) => {
       },
     }),
     db.lead.count({ where }),
-    db.lead.groupBy({ by: ['lifecycleStage'], where, _count: true }),
-    db.lead.groupBy({ by: ['isPriority'], where: baseWhere, _count: true }),
+    // Stage counts cover every stage (dead included) so each tab can show its own count.
+    db.lead.groupBy({ by: ['lifecycleStage'], where: filtered, _count: true }),
+    // Priority counts ignore the priority filter itself so both tabs always show their totals.
+    db.lead.groupBy({ by: ['isPriority'], where: { AND: [filtersWhere, scope] }, _count: true }),
   ])
   const priorityCount = priorityGroups.find(g => g.isPriority)?._count ?? 0
 

@@ -209,7 +209,7 @@ const PIPELINE_TABS = [
   { value: 'all', label: 'All leads' },
   { value: 'active', label: 'Active pipeline' },
   { value: 'converted', label: 'Converted' },
-  { value: 'closed', label: 'Closed / lost' },
+  { value: 'closed', label: 'Dead' },
 ] as const
 
 export default function LeadsPage() {
@@ -237,13 +237,14 @@ export default function LeadsPage() {
     return () => window.clearTimeout(timer)
   }, [searchInput])
   const leadsQuery = useQuery({
-    queryKey: ['leads', 'pipeline', { page, search, source, priority }],
+    queryKey: ['leads', 'pipeline', { page, search, source, priority, dead: tab === 'closed' }],
     queryFn: () => api.get<LeadListResponse>('/api/leads', {
       page,
       pageSize: 100,
       search,
       source: source === 'all' ? undefined : source,
       priority: priority === 'all' ? undefined : priority,
+      view: tab === 'closed' ? 'dead' : undefined,
     }),
     placeholderData: keepPreviousData,
   })
@@ -265,25 +266,24 @@ export default function LeadsPage() {
     }).sort((a, b) => Number(b.isPriority) - Number(a.isPriority))
   }, [leadsQuery.data?.items, tab])
   const sources = leadSource.options.filter((s) => s !== 'whatsapp')
-  const allCount = leadsQuery.data?.total ?? 0
   const countByStage = React.useMemo(
     () => new Map((leadsQuery.data?.stageCounts ?? []).map(({ stage, count }) => [stage, count])),
     [leadsQuery.data?.stageCounts]
   )
   const countForTab = React.useCallback(
     (value: string) => {
-      if (value === 'all') return allCount
+      if (value === 'all') return LEAD_STAGES.filter((stage) => !['LOST', 'DISQUALIFIED'].includes(stage)).reduce((count, stage) => count + (countByStage.get(stage) ?? 0), 0)
       if (value === 'active') return LEAD_STAGES.filter((stage) => !['CONVERTED', 'LOST', 'DISQUALIFIED'].includes(stage)).reduce((count, stage) => count + (countByStage.get(stage) ?? 0), 0)
       if (value === 'converted') return countByStage.get('CONVERTED') ?? 0
       return (countByStage.get('LOST') ?? 0) + (countByStage.get('DISQUALIFIED') ?? 0)
     },
-    [allCount, countByStage]
+    [countByStage]
   )
 
   async function updateStage(leadId: string, lifecycleStage: LeadStage) {
     if (lifecycleStage === 'LOST') {
       const lead = leadsQuery.data?.items.find((item) => item.id === leadId)
-      if (!window.confirm(`Mark ${lead?.fullName ?? 'this lead'} as dead? This closes it as lost and records the change in its activity history.`)) return
+      if (!window.confirm(`Mark ${lead?.fullName ?? 'this lead'} as dead? It leaves the board and the dashboard and moves to the Dead tab. The change is recorded in its activity history.`)) return
     }
     try {
       await api.patch(`/api/leads/${leadId}`, { lifecycleStage: lifecycleStage.toLowerCase() })
@@ -444,16 +444,16 @@ export default function LeadsPage() {
             if (tab === 'active') return !['CONVERTED', 'LOST', 'DISQUALIFIED'].includes(stage)
             if (tab === 'converted') return stage === 'CONVERTED'
             if (tab === 'closed') return stage === 'LOST' || stage === 'DISQUALIFIED'
-            return true
+            return !['LOST', 'DISQUALIFIED'].includes(stage)
           }).map((stage) => {
             const stageLeads = visibleLeads.filter((lead) => lead.lifecycleStage === stage)
             const stageCount = countByStage.get(stage) ?? 0
             return (
-              <section key={stage} aria-label={`${enumLabel(stage)} leads`} className="w-[min(84vw,300px)] shrink-0">
+              <section key={stage} aria-label={`${stageLabel(stage)} leads`} className="w-[min(84vw,300px)] shrink-0">
                 <header className="mb-3 flex items-center justify-between gap-2 px-1">
                   <div className="flex min-w-0 items-center gap-2">
                     <span className={cn('size-2 shrink-0 rounded-full', stageColor(stage))} />
-                    <h2 className="truncate text-sm font-semibold">{enumLabel(stage)}</h2>
+                    <h2 className="truncate text-sm font-semibold">{stageLabel(stage)}</h2>
                     <span className="rounded-full bg-muted px-2 py-0.5 text-xs tabular-nums text-muted-foreground">{stageCount}</span>
                   </div>
                   <ChevronDown aria-hidden="true" className="size-4 text-muted-foreground" />
@@ -621,7 +621,7 @@ function LeadCard({
               }}
               className="max-w-28 rounded-md border border-input bg-background px-2 py-1 text-[11px]"
             >
-              {LEAD_STAGES.filter((stage) => stage !== 'CONVERTED' || stage === lead.lifecycleStage).map((stage) => <option key={stage} value={stage}>{enumLabel(stage)}</option>)}
+              {LEAD_STAGES.filter((stage) => stage !== 'CONVERTED' || stage === lead.lifecycleStage).map((stage) => <option key={stage} value={stage}>{stageLabel(stage)}</option>)}
             </select>
           )}
         </div>
@@ -791,7 +791,7 @@ function LeadDetailsSheet({
             <SheetHeader className="border-b border-border/70 bg-muted/20 pr-12">
               <div className="flex flex-wrap items-center gap-2">
                 <SheetTitle className="text-xl">{lead.fullName}</SheetTitle>
-                <Badge variant="outline">{enumLabel(lead.lifecycleStage)}</Badge>
+                <Badge variant="outline">{stageLabel(lead.lifecycleStage)}</Badge>
                 {lead.isPriority && <Badge className="border-amber-300 bg-amber-100 text-amber-900 hover:bg-amber-100 dark:bg-amber-500/20 dark:text-amber-200"><Star className="mr-1 size-3 fill-amber-500 text-amber-500" />Priority reachout</Badge>}
               </div>
               <SheetDescription>{lead.organisationName || lead.leadNumber} · Added {formatDate(lead.createdAt)}</SheetDescription>
@@ -972,11 +972,18 @@ function LeadDetailsSheet({
                 </>
               )}
 
-              {canDelete && (
+              {(canDelete || (canUpdate && lead.lifecycleStage !== 'LOST')) && (
                 <section className="rounded-xl border border-destructive/30 p-4">
-                  <SectionTitle icon={Trash2} title="Remove lead" />
-                  <p className="mt-2 text-xs text-muted-foreground">Archives the lead: it disappears from the CRM and sheet sync will not bring it back. Its history is kept.</p>
-                  <Button variant="outline" size="sm" className="mt-3 text-destructive" onClick={onArchive}>Archive lead</Button>
+                  <SectionTitle icon={Trash2} title="Dead or remove" />
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Dead leads leave the board and the dashboard and stay under the Dead tab. Archive hides a lead completely (sheet sync will not bring it back); its history is kept.
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {canUpdate && lead.lifecycleStage !== 'LOST' && (
+                      <Button variant="outline" size="sm" onClick={() => onStageChange('LOST')}>Mark as dead</Button>
+                    )}
+                    {canDelete && <Button variant="outline" size="sm" className="text-destructive" onClick={onArchive}>Archive lead</Button>}
+                  </div>
                 </section>
               )}
 
@@ -986,7 +993,7 @@ function LeadDetailsSheet({
                   <div className="mt-3 flex flex-wrap gap-2">
                     {LEAD_STAGES.filter((stage) => stage !== lead.lifecycleStage && stage !== 'CONVERTED').map((stage) => (
                       <Button key={stage} variant="outline" size="sm" onClick={() => onStageChange(stage)}>
-                        Move to {enumLabel(stage)}
+                        Move to {stageLabel(stage)}
                       </Button>
                     ))}
                   </div>
@@ -1126,6 +1133,11 @@ function DetailText({ label, value }: { label: string; value: string }) {
       <p className="mt-1 whitespace-pre-wrap text-sm">{value}</p>
     </div>
   )
+}
+
+/** "Lost" leads are shown as "Dead" in this page. */
+function stageLabel(stage: string) {
+  return stage === 'LOST' ? 'Dead' : enumLabel(stage)
 }
 
 function stageColor(stage: LeadStage) {
