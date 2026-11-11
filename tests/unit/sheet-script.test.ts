@@ -11,6 +11,7 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { verifySignature } from '@/lib/sync/signature'
 import { canonicalizePartial } from '@/lib/sync/engine'
+import { validateValues } from '@/lib/sync/lead-sync'
 
 const toSigned = (buf: Buffer) => Array.from(buf).map(b => (b > 127 ? b - 256 : b)) // Apps Script returns signed bytes
 
@@ -185,5 +186,110 @@ describe('sheet script: beta invite helpers', () => {
 
   it('generates invite codes in the expected format without ambiguous characters', () => {
     expect(script.newCode()).toMatch(/^AURA-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/)
+  })
+})
+
+describe('sheet script: Beta Tracker configuration (BetaTracker.gs)', () => {
+  const betaSource = readFileSync(path.resolve(process.cwd(), 'docs/sheet-sync/BetaTracker.gs'), 'utf8')
+  const betaContext = createContext({ Utilities, console })
+  new Script(betaSource).runInContext(betaContext)
+  const beta = runInContext('({ CONFIG, mapHeaders_, rowToFields_, newRef_, normalizePhone_, pendingEmails_, mailBody_ })', betaContext) as {
+    CONFIG: { COLUMN_MAP: Record<string, string>; SHEET_NAME: string }
+    mapHeaders_: (h: unknown[], m?: Record<string, string>) => Record<string, number>
+    rowToFields_: (m: Record<string, number>, r: unknown[]) => Record<string, string>
+    newRef_: (f: Record<string, string>) => string
+    normalizePhone_: (v: string) => string
+    pendingEmails_: (h: unknown[], r: unknown[][]) => { nameCol: number; emailCol: number; sentCol: number; pending: Array<{ index: number; name: string; email: string }> }
+    mailBody_: (name: string) => string
+  }
+
+  const headers = [
+    'Name', 'Email ', 'Phone / WhatsApp', 'Lead Source', 'Call Date', 'Demo Date', 'Trial Start Date',
+    'Trial End Date (Day 21)', 'Card/UPI Added (Y/N)', 'Session Logged (Y/N)', 'Calendar Synced (Y/N)', '2nd Login (Y/N)',
+    'Day-15 Converted (Y/N)', 'Tier (₹499/₹999/₹2999)', 'MRR (₹)', 'Status', 'Notes', 'Clinic / Solo', '',
+  ]
+  const mapping = beta.mapHeaders_(headers, beta.CONFIG.COLUMN_MAP)
+  const row = (over: Record<number, unknown>) => {
+    const r: unknown[] = new Array(headers.length).fill('')
+    Object.entries(over).forEach(([i, v]) => { r[Number(i)] = v })
+    return r
+  }
+
+  it('targets the Beta Tracker tab and maps only the columns the CRM understands', () => {
+    expect(beta.CONFIG.SHEET_NAME).toBe('Beta Tracker')
+    expect(mapping).toEqual({ fullName: 0, email: 1, phone: 2, waitlistSource: 3, painPoints: 16, useCase: 17 })
+  })
+
+  it('splits the name, normalises the phone and keeps the source text', () => {
+    const fields = beta.rowToFields_(mapping, row({ 0: 'Heena Yadav ', 1: 'heenayadav205@gmail.com', 2: 7042524525, 3: 'Hot lead - Survey ', 16: 'Wants calendar sync' }))
+    expect(fields).toMatchObject({
+      firstName: 'Heena', lastName: 'Yadav', email: 'heenayadav205@gmail.com', phone: '+917042524525',
+      waitlistSource: 'Hot lead - Survey', painPoints: 'Wants calendar sync',
+    })
+    expect(validateValues(canonicalizePartial(fields))).toEqual([])
+  })
+
+  it('never sends a blank name, so it cannot clear the name the CRM already has', () => {
+    const fields = beta.rowToFields_(mapping, row({ 1: 'a@b.co', 2: '9828660949' }))
+    expect(fields).not.toHaveProperty('firstName')
+    expect(fields).not.toHaveProperty('lastName')
+  })
+
+  it('handles single names and multi-part surnames', () => {
+    expect(beta.rowToFields_(mapping, row({ 0: 'Saakshi', 1: 'x@y.co' }))).toMatchObject({ firstName: 'Saakshi', lastName: '' })
+    expect(beta.rowToFields_(mapping, row({ 0: 'Dr Chinu Agrawal', 1: 'x@y.co' }))).toMatchObject({ firstName: 'Dr', lastName: 'Chinu Agrawal' })
+  })
+
+  it('normalises Indian numbers only when they are bare 10-digit (or 91-prefixed)', () => {
+    expect(beta.normalizePhone_('98286 60949')).toBe('+919828660949')
+    expect(beta.normalizePhone_('919828660949')).toBe('+919828660949')
+    expect(beta.normalizePhone_('+919828660949')).toBe('+919828660949')
+    expect(beta.normalizePhone_('+14155550123')).toBe('+14155550123')
+    expect(beta.normalizePhone_('')).toBe('')
+  })
+
+  it('gives a new row the same External Ref the import used, so it links instead of duplicating', () => {
+    expect(beta.newRef_({ email: ' Heena.Yadav205@Gmail.com ' })).toBe('beta-tracker-heena.yadav205@gmail.com')
+    expect(beta.newRef_({})).toBe('uuid')
+  })
+
+  it('does not change the default Code.gs behaviour (no prefix, no phone rewriting)', () => {
+    const plain = runInContext('({ CONFIG, newRef_, normalizePhone_ })', context) as {
+      CONFIG: { REF_PREFIX: string; PHONE_COUNTRY_CODE: string }; newRef_: (f: Record<string, string>) => string; normalizePhone_: (v: string) => string
+    }
+    expect(plain.CONFIG.REF_PREFIX).toBe('')
+    expect(plain.newRef_({ email: 'a@b.co' })).toBe('uuid')
+    expect(plain.normalizePhone_('9828660949')).toBe('9828660949')
+  })
+
+  describe('intro e-mails', () => {
+    const mailHeaders = ['Name', 'Email ', 'Phone / WhatsApp', 'Email Sent']
+
+    it('finds columns by header, so the phone column is never mistaken for a status', () => {
+      const plan = beta.pendingEmails_(mailHeaders, [['Heena Yadav', 'h@x.co', '7042524525', '']])
+      expect(plan).toMatchObject({ nameCol: 0, emailCol: 1, sentCol: 3 })
+      expect(plan.pending).toEqual([{ index: 0, name: 'Heena Yadav', email: 'h@x.co' }])
+    })
+
+    it('skips rows already marked, rows without a valid email, and keeps blank names', () => {
+      const plan = beta.pendingEmails_(mailHeaders, [
+        ['A', 'a@x.co', '1', 'Sent'],
+        ['B', 'not-an-email', '2', ''],
+        ['C', '', '3', ''],
+        ['', 'd@x.co', '4', ''],
+      ])
+      expect(plan.pending).toEqual([{ index: 3, name: '', email: 'd@x.co' }])
+    })
+
+    it('sends nothing when the Email or Email Sent column is missing', () => {
+      expect(beta.pendingEmails_(['Name', 'Phone'], [['A', '1']]).pending).toEqual([])
+      expect(beta.pendingEmails_(['Name', 'Email'], [['A', 'a@x.co']]).pending).toEqual([])
+    })
+
+    it('greets by name, with a fallback, and keeps the original message', () => {
+      expect(beta.mailBody_('Heena Yadav').startsWith('Hi Heena Yadav,')).toBe(true)
+      expect(beta.mailBody_('').startsWith('Hi there,')).toBe(true)
+      expect(beta.mailBody_('X')).toContain('₹459/month')
+    })
   })
 })

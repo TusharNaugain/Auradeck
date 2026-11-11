@@ -131,3 +131,18 @@ edits it in the CRM. To use a real name instead, add a `First name` column to th
 - If these people already exist in the CRM, their rows show **REJECTED: Duplicate of LD-…**. Type that lead number
   into *CRM Lead Number* to link the row, instead of creating a second lead.
 - Custom fields are saved inside each lead's existing `customFields` data, so **no extra migration** is needed.
+
+## Beta Tracker sheet ([BetaTracker.gs](./BetaTracker.gs))
+
+`BetaTracker.gs` is `Code.gs` without the website sign-up form and the invite e-mail sender, set up for the
+`auradeck_beta_tracker` sheet's **Beta Tracker** tab, plus an intro e-mail sender. Nothing is e-mailed automatically: only **Email > Send intro e-mails to new rows** sends, after a confirmation, to rows with an email and an empty *Email Sent* column (the script adds that column and writes `Sent`). Install it the same way as above (Extensions > Apps Script,
+Script properties `CRM_BASE_URL` and `SYNC_SHARED_SECRET`, then **CRM Sync > Set up sheet** and **Sync now**).
+
+- `Name` is split into first + last name (a blank name is never sent, so it cannot clear a CRM name).
+- `Phone / WhatsApp` -> phone; bare 10-digit numbers become `+91...` (`CONFIG.PHONE_COUNTRY_CODE`).
+- `Lead Source` -> the free-text source (`waitlistSource`). A new lead whose source starts with "Hot" starts as **Priority reachout**.
+- `Notes` -> pain points, `Clinic / Solo` -> use case. Other columns (status, dates, tier, MRR) are not synced.
+- A new row's External Ref is `beta-tracker-<email>` (`CONFIG.REF_PREFIX`), the same one used for the one-time import, so the
+  first sync links existing rows to their `LD-` numbers instead of rejecting them. A row whose email/phone already belongs to a
+  lead from another sheet shows *REJECTED: Duplicate of LD-...*; type that number into *CRM Lead Number* to link it.
+

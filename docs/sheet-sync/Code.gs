@@ -22,6 +22,11 @@ const CONFIG = {
   LOCK_WAIT_MS: 30000,
   // Optional exact overrides: { 'My Column Title': 'city' }. Normally not needed.
   COLUMN_MAP: {},
+  // Optional. When set, a new row's permanent External Ref is PREFIX + its email (instead of a random id), so a
+  // sheet whose leads were already imported links to them on the first sync instead of being rejected as duplicates.
+  REF_PREFIX: '',
+  // Optional, e.g. '91'. A bare 10-digit phone number is sent as +<code><number> so it matches the CRM's format.
+  PHONE_COUNTRY_CODE: '',
 };
 
 const SPECIAL_HEADERS = {
@@ -111,7 +116,8 @@ function mapHeaders_(headers, columnMap) {
   headers.forEach(function (header, index) {
     const key = normalizeHeader_(header);
     const field = overrides[key] || aliasToField[key];
-    if (field && SYNC_FIELDS.indexOf(field) !== -1 && mapping[field] === undefined) mapping[field] = index;
+    // 'fullName' is a pseudo-field (only via COLUMN_MAP): one "Name" column split into first + last name.
+    if (field && (field === 'fullName' || SYNC_FIELDS.indexOf(field) !== -1) && mapping[field] === undefined) mapping[field] = index;
   });
   return mapping;
 }
@@ -138,8 +144,40 @@ function isYes_(text) { return ['yes', 'y', 'true', '1', 'x'].indexOf(String(tex
 /** Row values -> { field: text } for every mapped column (empty cell = '' = "clear it"). */
 function rowToFields_(mapping, rowValues) {
   const fields = {};
-  Object.keys(mapping).forEach(function (field) { fields[field] = cellToText_(rowValues[mapping[field]]); });
+  Object.keys(mapping).forEach(function (field) {
+    const text = cellToText_(rowValues[mapping[field]]);
+    if (field === 'fullName') {
+      // A blank name cell sends nothing, so it can never clear a name the CRM already has.
+      const name = splitName_(text);
+      if (name.firstName) { fields.firstName = name.firstName; fields.lastName = name.lastName; }
+    } else if (field === 'phone' || field === 'whatsappNumber') {
+      fields[field] = normalizePhone_(text);
+    } else {
+      fields[field] = text;
+    }
+  });
   return fields;
+}
+
+function splitName_(text) {
+  const parts = String(text || '').trim().split(/\s+/).filter(Boolean);
+  return { firstName: parts[0] || '', lastName: parts.slice(1).join(' ') };
+}
+
+/** Bare 10-digit (or 91 + 10-digit) numbers get a "+" and country code when CONFIG.PHONE_COUNTRY_CODE is set. */
+function normalizePhone_(text) {
+  const code = CONFIG.PHONE_COUNTRY_CODE;
+  const compact = String(text || '').replace(/[\s\-()]/g, '');
+  if (!code || !compact) return text;
+  if (/^\d{10}$/.test(compact)) return '+' + code + compact;
+  if (compact.indexOf(code) === 0 && /^\d{10}$/.test(compact.slice(code.length))) return '+' + compact;
+  return text;
+}
+
+/** Permanent External Ref for a new row: PREFIX + email when configured, otherwise a random id. */
+function newRef_(fields) {
+  const email = String(fields.email || '').trim().toLowerCase();
+  return CONFIG.REF_PREFIX && email ? CONFIG.REF_PREFIX + email : Utilities.getUuid();
 }
 
 function toHex_(bytes) {
@@ -322,6 +360,7 @@ function setupSheet() {
   const lines = SYNC_FIELDS.map(function (f) {
     return (mapping[f] !== undefined ? '✔ ' : '✘ ') + f + (mapping[f] !== undefined ? '  ←  "' + finalHeaders[mapping[f]] + '"' : '  (no matching column)');
   });
+  if (mapping.fullName !== undefined) lines.unshift('✔ fullName (split into first + last name)  ←  "' + finalHeaders[mapping.fullName] + '"');
   // Text that merely LOOKS like a date (e.g. "10/12/2026") is ambiguous (US vs day-first), so flag it.
   const dataRows = sheet.getLastRow() - CONFIG.HEADER_ROW;
   const warnings = [];
@@ -404,7 +443,7 @@ function pushPhase_(ctx, state, summary, confirmMassChange) {
   let rows = readRows_(ctx);
   rows.forEach(function (r) {
     if (!r.leadNumber && !r.externalRef && hasContent_(r.fields)) {
-      ctx.sheet.getRange(r.rowIndex, ctx.refCol + 1).setValue(Utilities.getUuid());
+      ctx.sheet.getRange(r.rowIndex, ctx.refCol + 1).setValue(newRef_(r.fields));
     }
   });
   SpreadsheetApp.flush();
