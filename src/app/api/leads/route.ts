@@ -9,7 +9,7 @@ import { db } from '@/lib/db'
 import { guardedRoute, parseJsonBody } from '@/lib/utils/api-helpers'
 import { routeHandler } from '@/lib/utils/api-helpers'
 import { leadListSchema, leadCreateSchema } from '@/lib/validations/crm'
-import { searchTerm } from '@/lib/utils/list'
+import { searchWords } from '@/lib/utils/list'
 import { nextNumber } from '@/lib/services/numbering'
 import { findLeadDuplicate, computeLeadScore, DEAD_LEAD_STAGES } from '@/lib/services/leads'
 import { createAuditLog } from '@/lib/audit'
@@ -27,9 +27,9 @@ export const GET = routeHandler(async (req: NextRequest) => {
   const { searchParams } = new URL(req.url)
   const query = leadListSchema.parse(Object.fromEntries(searchParams))
 
-  const searchOr = searchTerm(query.search, [
+  const searchAnd = searchWords(query.search, [
     'firstName', 'lastName', 'fullName', 'email',
-    'organisationName', 'leadNumber', 'phoneNumber',
+    'organisationName', 'leadNumber', 'phoneNumber', 'city',
   ])
 
   const recordScope = await resolveLeadScope(organisationId, ctx.scopeType, user.id, ctx.teamId)
@@ -50,12 +50,14 @@ export const GET = routeHandler(async (req: NextRequest) => {
             },
           }]
         : []),
-      ...(searchOr ? [{ OR: searchOr }] : []),
+      ...(searchAnd as Prisma.LeadWhereInput[]),
     ],
   }
   // Dead leads (lost / disqualified) are hidden unless the Dead view or an explicit stage is requested.
   const dead = [...DEAD_LEAD_STAGES]
-  const scope: Prisma.LeadWhereInput = query.stage ? {} : { lifecycleStage: query.view === 'dead' ? { in: dead } : { notIn: dead } }
+  const scope: Prisma.LeadWhereInput = query.stage ? {} : {
+    lifecycleStage: query.view === 'dead' ? { in: dead } : { notIn: query.view === 'pipeline' ? [...dead, 'CONVERTED' as const] : dead },
+  }
   const filtered: Prisma.LeadWhereInput = query.priority
     ? { AND: [filtersWhere, { isPriority: query.priority === 'priority' }] }
     : filtersWhere
@@ -73,7 +75,7 @@ export const GET = routeHandler(async (req: NextRequest) => {
         organisationName: true, leadSource: true, lifecycleStage: true,
         leadScore: true, isPriority: true, assignedToUserId: true, nextFollowUpAt: true,
         createdAt: true, city: true, state: true, tags: true, phoneNumber: true,
-        whatsappNumber: true, lastContactedAt: true, firstContactedAt: true,
+        whatsappNumber: true, lastContactedAt: true, firstContactedAt: true, customFields: true,
         assignedTo: { select: { id: true, fullName: true } },
       },
     }),

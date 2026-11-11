@@ -50,3 +50,16 @@ export function parseDateParam(value: string | null | undefined): Date | undefin
 export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
+
+/**
+ * Multi-word search: every word must match at least one of the fields (so "heena gmail" or "heena yadav" both work).
+ * Returns clauses to AND together.
+ */
+export function searchWords(search: string | undefined, fields: string[]): Record<string, unknown>[] {
+  return (search ?? '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 6)
+    .map((word) => ({ OR: fields.map((field) => ({ [field]: { contains: word, mode: 'insensitive' as const } })) }))
+}

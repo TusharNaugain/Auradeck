@@ -1,6 +1,7 @@
 'use client'
 
 import * as React from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import {
   ArrowUpRight,
@@ -12,6 +13,8 @@ import {
   CircleDollarSign,
   Clock3,
   ExternalLink,
+  LayoutGrid,
+  List as ListIcon,
   Mail,
   MapPin,
   Phone,
@@ -48,6 +51,7 @@ import { DEMO_MODE } from '@/lib/demo-mode'
 import { leadCreateSchema, leadSource, preferredContactMethod } from '@/lib/validations/crm'
 import { toast } from 'sonner'
 import { createGoogleCalendarLink } from '@/lib/client/calendar-link'
+import { LeadsTable, type SortKey } from './leads-table'
 
 const createFields: FieldSpec[] = [
   { name: 'firstName', label: 'First name', kind: 'text', half: true },
@@ -105,6 +109,7 @@ type LeadSummary = {
   tags: string[]
   phoneNumber: string | null
   whatsappNumber: string | null
+  customFields?: Record<string, unknown> | null
 }
 
 type LeadActivity = {
@@ -213,6 +218,19 @@ const PIPELINE_TABS = [
 ] as const
 
 export default function LeadsPage() {
+  return (
+    <React.Suspense fallback={<Skeleton className="h-[420px] w-full" />}>
+      <LeadsPageInner />
+    </React.Suspense>
+  )
+}
+
+function LeadsPageInner() {
+  const router = useRouter()
+  const params = useSearchParams()
+  const [layout, setLayout] = React.useState<'list' | 'board'>('list')
+  const [sortBy, setSortBy] = React.useState<SortKey>('createdAt')
+  const [sort, setSort] = React.useState<'asc' | 'desc'>('desc')
   const [tab, setTab] = React.useState<string>('all')
   const [searchInput, setSearchInput] = React.useState('')
   const [search, setSearch] = React.useState('')
@@ -230,6 +248,28 @@ export default function LeadsPage() {
   const canManageBilling = useHasPermission('billing.manage')
   const invalidate = useInvalidate()
   React.useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem('leads-layout')
+      if (saved === 'board' || saved === 'list') setLayout(saved)
+    } catch { /* storage unavailable: keep the default */ }
+  }, [])
+  function changeLayout(next: 'list' | 'board') {
+    setLayout(next)
+    try { window.localStorage.setItem('leads-layout', next) } catch { /* ignore */ }
+  }
+  function changeSort(column: SortKey) {
+    if (column === sortBy) setSort((current) => (current === 'asc' ? 'desc' : 'asc'))
+    else { setSortBy(column); setSort(column === 'firstName' ? 'asc' : 'desc') }
+  }
+  // Global search (and any link) opens a lead with /leads?lead=<id>, whichever page of the list it is on.
+  const leadParam = params.get('lead')
+  React.useEffect(() => {
+    if (!leadParam) return
+    setSelectedId(leadParam)
+    router.replace('/leads', { scroll: false })
+  }, [leadParam, router])
+  React.useEffect(() => { setPage(1) }, [tab, layout, sortBy, sort])
+  React.useEffect(() => {
     const timer = window.setTimeout(() => {
       setSearch(searchInput.trim())
       setPage(1)
@@ -237,14 +277,16 @@ export default function LeadsPage() {
     return () => window.clearTimeout(timer)
   }, [searchInput])
   const leadsQuery = useQuery({
-    queryKey: ['leads', 'pipeline', { page, search, source, priority, dead: tab === 'closed' }],
+    queryKey: ['leads', 'pipeline', { page, search, source, priority, tab, layout, sortBy, sort }],
     queryFn: () => api.get<LeadListResponse>('/api/leads', {
       page,
-      pageSize: 100,
+      pageSize: layout === 'list' ? 50 : 100,
       search,
       source: source === 'all' ? undefined : source,
       priority: priority === 'all' ? undefined : priority,
-      view: tab === 'closed' ? 'dead' : undefined,
+      ...(tab === 'active' ? { view: 'pipeline' } : tab === 'converted' ? { stage: 'converted' } : tab === 'closed' ? { view: 'dead' } : {}),
+      sortBy,
+      sort,
     }),
     placeholderData: keepPreviousData,
   })
@@ -257,14 +299,15 @@ export default function LeadsPage() {
 
   const visibleLeads = React.useMemo(() => {
     const items = leadsQuery.data?.items ?? []
-    return items.filter((lead) => {
+    const kept = items.filter((lead) => {
       if (tab === 'active') return !['CONVERTED', 'LOST', 'DISQUALIFIED'].includes(lead.lifecycleStage)
       if (tab === 'converted') return lead.lifecycleStage === 'CONVERTED'
       if (tab === 'closed') return ['LOST', 'DISQUALIFIED'].includes(lead.lifecycleStage)
       return true
-    // Priority leads float to the top of each column; the sort is stable, so order is otherwise unchanged.
-    }).sort((a, b) => Number(b.isPriority) - Number(a.isPriority))
-  }, [leadsQuery.data?.items, tab])
+    })
+    // Priority leads float to the top of each board column (stable sort); the list keeps the server sort.
+    return layout === 'board' ? kept.sort((a, b) => Number(b.isPriority) - Number(a.isPriority)) : kept
+  }, [leadsQuery.data?.items, tab, layout])
   const sources = leadSource.options.filter((s) => s !== 'whatsapp')
   const countByStage = React.useMemo(
     () => new Map((leadsQuery.data?.stageCounts ?? []).map(({ stage, count }) => [stage, count])),
@@ -344,6 +387,16 @@ export default function LeadsPage() {
         description="Track every conversation from first enquiry through conversion."
         actions={
           <div className="flex items-center gap-2">
+            <div role="group" aria-label="Layout" className="flex rounded-md border border-input p-0.5">
+              <Button type="button" variant={layout === 'list' ? 'secondary' : 'ghost'} size="sm" className="h-7 px-2" aria-pressed={layout === 'list'} onClick={() => changeLayout('list')}>
+                <ListIcon className="size-4" />
+                List
+              </Button>
+              <Button type="button" variant={layout === 'board' ? 'secondary' : 'ghost'} size="sm" className="h-7 px-2" aria-pressed={layout === 'board'} onClick={() => changeLayout('board')}>
+                <LayoutGrid className="size-4" />
+                Board
+              </Button>
+            </div>
             <Button variant="outline" size="sm" onClick={() => void leadsQuery.refetch()} disabled={leadsQuery.isFetching}>
               <RefreshCw className={cn('size-4', leadsQuery.isFetching && 'animate-spin')} />
               Refresh
@@ -438,7 +491,20 @@ export default function LeadsPage() {
         </Card>
       )}
 
-      {leadsQuery.data && visibleLeads.length > 0 && (
+      {layout === 'list' && leadsQuery.data && visibleLeads.length > 0 && (
+        <LeadsTable
+          leads={visibleLeads as never}
+          canUpdate={canUpdate}
+          stageLabel={stageLabel}
+          sortBy={sortBy}
+          sort={sort}
+          onSort={changeSort}
+          onOpen={setSelectedId}
+          onTogglePriority={(lead) => void togglePriority(lead.id, !lead.isPriority)}
+        />
+      )}
+
+      {layout === 'board' && leadsQuery.data && visibleLeads.length > 0 && (
         <div className="flex items-start gap-3 overflow-x-auto pb-4">
           {LEAD_STAGES.filter((stage) => {
             if (tab === 'active') return !['CONVERTED', 'LOST', 'DISQUALIFIED'].includes(stage)
@@ -488,7 +554,7 @@ export default function LeadsPage() {
       {leadsQuery.data && leadsQuery.data.totalPages > 1 && (
         <div className="flex items-center justify-between border-t border-border/70 pt-3">
           <p className="text-sm text-muted-foreground">
-            Page {leadsQuery.data.page} of {leadsQuery.data.totalPages} · {formatNumber(leadsQuery.data.total)} leads
+            Page {leadsQuery.data.page} of {leadsQuery.data.totalPages} · {formatNumber(leadsQuery.data.total)} leads · {layout === 'list' ? 50 : 100} per page
           </p>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1 || leadsQuery.isFetching}>

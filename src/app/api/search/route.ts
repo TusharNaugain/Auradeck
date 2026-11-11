@@ -7,9 +7,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { guardedRoute, routeHandler } from '@/lib/utils/api-helpers'
 import { PERMISSIONS } from '@/lib/permissions'
+import { searchWords } from '@/lib/utils/list'
+import { resolveLeadScope } from '@/lib/reports/scope'
 import { v4 as uuidv4 } from 'uuid'
 
 const ENTITY_LIMIT = 5
+const LEAD_LIMIT = 10
 
 export const GET = routeHandler(async (req: NextRequest) => {
   const guard = await guardedRoute(req, { policy: 'apiRead', keyByUser: true })
@@ -17,7 +20,8 @@ export const GET = routeHandler(async (req: NextRequest) => {
   const { organisationId, ctx, user } = guard.context!
 
   const { searchParams } = new URL(req.url)
-  const search = (searchParams.get('search') ?? '').trim()
+  // `search` is the documented name; `q` is accepted too.
+  const search = (searchParams.get('search') ?? searchParams.get('q') ?? '').trim()
   if (search.length < 2) {
     return NextResponse.json({ success: true, data: { results: [] }, requestId: uuidv4() })
   }
@@ -27,18 +31,22 @@ export const GET = routeHandler(async (req: NextRequest) => {
 
   // Leads
   if (ctx.permissions.has(PERMISSIONS.LEADS_VIEW) || ctx.permissions.has(PERMISSIONS.SUPER_ADMIN)) {
+    // Same record scope as the Leads page: a rep who only sees their own leads only finds those.
+    const leadScope = await resolveLeadScope(organisationId, ctx.scopeType, user.id, ctx.teamId)
     const leads = await db.lead.findMany({
       where: {
         organisationId, deletedAt: null,
-        OR: [{ firstName: contains }, { lastName: contains }, { email: contains }, { leadNumber: contains }, { organisationName: contains }, { phoneNumber: { contains: search } }],
+        AND: [leadScope, ...searchWords(search, ['fullName', 'firstName', 'lastName', 'email', 'leadNumber', 'organisationName', 'phoneNumber', 'city'])] as never,
       },
-      take: ENTITY_LIMIT,
-      select: { id: true, leadNumber: true, fullName: true, organisationName: true },
+      orderBy: { createdAt: 'desc' },
+      take: LEAD_LIMIT,
+      select: { id: true, leadNumber: true, fullName: true, email: true, organisationName: true, lifecycleStage: true },
     })
+    // The Leads page opens the lead's panel for ?lead=<id>, wherever that lead sits in the list.
     results.push(...leads.map((l) => ({
       type: 'lead', id: l.id, title: l.fullName,
-      subtitle: `${l.leadNumber}${l.organisationName ? ` · ${l.organisationName}` : ''}`,
-      url: `/leads/${l.id}`,
+      subtitle: [l.leadNumber, l.email ?? l.organisationName, l.lifecycleStage === 'LOST' ? 'Dead' : null].filter(Boolean).join(' · '),
+      url: `/leads?lead=${l.id}`,
     })))
   }
 
@@ -52,7 +60,7 @@ export const GET = routeHandler(async (req: NextRequest) => {
     results.push(...accounts.map((a) => ({
       type: 'account', id: a.id, title: a.accountName,
       subtitle: a.customerAccountCode ?? undefined,
-      url: `/accounts/${a.id}`,
+      url: '/accounts',
     })))
   }
 
@@ -64,7 +72,7 @@ export const GET = routeHandler(async (req: NextRequest) => {
       select: { id: true, fullName: true, email: true },
     })
     results.push(...contacts.map((c) => ({
-      type: 'contact', id: c.id, title: c.fullName, subtitle: c.email ?? undefined, url: `/contacts/${c.id}`,
+      type: 'contact', id: c.id, title: c.fullName, subtitle: c.email ?? undefined, url: '/contacts',
     })))
   }
 
@@ -76,7 +84,7 @@ export const GET = routeHandler(async (req: NextRequest) => {
       select: { id: true, opportunityNumber: true, name: true, stage: true },
     })
     results.push(...opps.map((o) => ({
-      type: 'opportunity', id: o.id, title: o.name, subtitle: `${o.opportunityNumber} · ${o.stage}`, url: `/opportunities/${o.id}`,
+      type: 'opportunity', id: o.id, title: o.name, subtitle: `${o.opportunityNumber} · ${o.stage}`, url: '/opportunities',
     })))
   }
 
@@ -88,7 +96,7 @@ export const GET = routeHandler(async (req: NextRequest) => {
       select: { id: true, ticketNumber: true, subject: true, status: true },
     })
     results.push(...tickets.map((t) => ({
-      type: 'ticket', id: t.id, title: t.subject, subtitle: `${t.ticketNumber} · ${t.status}`, url: `/tickets/${t.id}`,
+      type: 'ticket', id: t.id, title: t.subject, subtitle: `${t.ticketNumber} · ${t.status}`, url: '/tickets',
     })))
   }
 
@@ -104,10 +112,10 @@ export const GET = routeHandler(async (req: NextRequest) => {
       select: { id: true, clientNumber: true, firstName: true, lastName: true },
     })
     results.push(...clients.map((c) => ({
-      type: 'client', id: c.id, title: `${c.firstName} ${c.lastName}`, subtitle: c.clientNumber, url: `/clients/${c.id}`,
+      type: 'client', id: c.id, title: `${c.firstName} ${c.lastName}`, subtitle: c.clientNumber, url: '/clients',
     })))
   }
 
   void ctx
-  return NextResponse.json({ success: true, data: { results: results.slice(0, 25) }, requestId: uuidv4() })
+  return NextResponse.json({ success: true, data: { results: results.slice(0, 40) }, requestId: uuidv4() })
 })

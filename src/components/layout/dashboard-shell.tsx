@@ -104,7 +104,7 @@ function GlobalSearch() {
     setLoading(true)
     const id = setTimeout(() => {
       void api
-        .get<{ results: SearchResult[] }>('/api/search', { q: trimmed })
+        .get<{ results: SearchResult[] }>('/api/search', { search: trimmed })
         .then(payload => {
           if (!cancelled) setResults(payload.results)
         })
@@ -153,6 +153,7 @@ function GlobalSearch() {
               <Link
                 key={`${item.type}-${item.id}`}
                 href={item.url}
+                prefetch={false}
                 onClick={() => {
                   setOpen(false)
                   setTerm('')
