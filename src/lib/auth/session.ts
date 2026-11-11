@@ -123,9 +123,18 @@ export const getCurrentUser = cache(async () => {
 
   if (!dbSession?.user) {
     // Session invalid; clear cookie
-    await clearSession()
+    // Cookies cannot be written while rendering a Server Component, so ignore that failure.
+    await clearSession().catch(() => {})
     return null
   }
+
+  // No ACTIVE membership (e.g. removed from the organisation) means no access at all, and a
+  // session org the user no longer belongs to falls back to one they still do.
+  const { memberships } = dbSession.user
+  if (memberships.length === 0) return null
+  const currentOrganisationId = memberships.some(m => m.organisationId === session.organisationId)
+    ? session.organisationId
+    : memberships[0].organisationId
 
   // Update last active time (throttled to at most once per 5 minutes, non-blocking)
   const FIVE_MINUTES_MS = 5 * 60 * 1000
@@ -142,7 +151,7 @@ export const getCurrentUser = cache(async () => {
   return {
     ...dbSession.user,
     sessionId: session.sessionId,
-    currentOrganisationId: session.organisationId,
+    currentOrganisationId,
   }
 })
 

@@ -101,65 +101,37 @@ export const POST = routeHandler(async (req: NextRequest) => {
     select: { displayName: true },
   })
 
-  const { invitationId, raw } = await createInvitationToken(
-    body.email,
-    organisationId,
-    role.id,
-    user.id,
-    body.teamId ?? undefined
-  )
+  const email = body.email.trim().toLowerCase()
+  const { invitationId, raw } = await createInvitationToken(email, organisationId, role.id, user.id, body.teamId ?? undefined)
 
-  // Provision access immediately so the invitee can sign in with Google even when no
-  // email provider is configured (the invitation email may never arrive). The token stays
-  // valid, so the email link still works for setting a password. Existing memberships and
-  // non-ACTIVE existing users are left untouched.
-  const inviteeEmail = body.email.trim().toLowerCase()
-  const provisioned = await db.$transaction(async (tx) => {
-    let invitee = await tx.user.findUnique({ where: { email: inviteeEmail }, select: { id: true, status: true } })
-    let createdUser = false
-    if (!invitee) {
-      const namePart = inviteeEmail.split('@')[0]
-      const first = body.firstName?.trim() || namePart
-      const last = body.lastName?.trim() || ''
-      invitee = await tx.user.create({
-        data: {
-          email: inviteeEmail, fullName: `${first} ${last}`.trim(), firstName: first, lastName: last,
-          status: 'ACTIVE', emailVerifiedAt: new Date(),
-        },
-        select: { id: true, status: true },
-      })
-      createdUser = true
-    }
-    const existingMembership = await tx.membership.findUnique({
-      where: { userId_organisationId: { userId: invitee.id, organisationId } },
+  // Grant access now so the invitee can sign in with Google even if the invitation email never
+  // arrives (no email provider). Only a new user, or a previously removed member, is changed.
+  const access = await db.$transaction(async (tx) => {
+    const first = body.firstName?.trim() || email.split('@')[0]
+    const last = body.lastName?.trim() || ''
+    const invitee = await tx.user.upsert({
+      where: { email },
+      update: {},
+      create: { email, fullName: `${first} ${last}`.trim(), firstName: first, lastName: last, status: 'ACTIVE', emailVerifiedAt: new Date() },
       select: { id: true, status: true },
     })
-    if (invitee.status !== 'ACTIVE') return { createdUser, membership: 'skipped' }
-    if (existingMembership) {
-      // A previously removed member can be re-invited; anything else is left as it is.
-      if (existingMembership.status !== 'DEACTIVATED') return { createdUser, membership: 'existing' }
-      await tx.membership.update({
-        where: { id: existingMembership.id },
-        data: {
-          status: 'ACTIVE', roleId: role.id, teamId: body.teamId ?? null,
-          deactivatedAt: null, acceptedAt: new Date(), invitedBy: user.id, invitedAt: new Date(),
-        },
-      })
-      return { createdUser, membership: 'reactivated' }
-    }
-    await tx.membership.create({
-      data: {
-        userId: invitee.id, organisationId, roleId: role.id, teamId: body.teamId ?? undefined,
-        status: 'ACTIVE', isPrimary: false, acceptedAt: new Date(), invitedBy: user.id,
-        invitedAt: new Date(), scopeType: 'ORGANISATION',
-      },
+    if (invitee.status !== 'ACTIVE') return 'skipped'
+    const key = { userId_organisationId: { userId: invitee.id, organisationId } }
+    const existing = await tx.membership.findUnique({ where: key, select: { status: true } })
+    if (existing && existing.status !== 'DEACTIVATED') return 'existing'
+    const now = new Date()
+    const data = { roleId: role.id, teamId: body.teamId ?? null, status: 'ACTIVE' as const, deactivatedAt: null, acceptedAt: now, invitedBy: user.id, invitedAt: now }
+    await tx.membership.upsert({
+      where: key,
+      update: data,
+      create: { ...data, userId: invitee.id, organisationId, isPrimary: false, scopeType: 'ORGANISATION' },
     })
-    return { createdUser, membership: 'created' }
+    return existing ? 'reactivated' : 'created'
   })
 
   const acceptUrl = `${appUrl}/accept-invite?token=${raw}`
   await sendTemplatedEmail(
-    body.email,
+    email,
     invitationEmail(acceptUrl, organisation?.displayName ?? 'AuraDeck', user.fullName)
   )
 
@@ -180,7 +152,7 @@ export const POST = routeHandler(async (req: NextRequest) => {
       success: true,
       data: {
         invitationId,
-        access: provisioned.membership,
+        access,
         lifecycle: 'Access granted now (sign in with Google using this email). Invitation email is sent only if an email provider is configured.',
       },
       requestId: uuidv4(),

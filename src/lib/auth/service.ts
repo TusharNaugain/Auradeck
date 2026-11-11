@@ -248,7 +248,12 @@ export async function login(input: LoginInput, ctx: { ipHash: string; userAgent:
     select: { organisationId: true },
   })
 
-  await createSession(user.id, membership?.organisationId ?? undefined, {
+  if (!membership) {
+    await recordLoginAttempt(input.email, ctx.ipHash, user.id, false, 'no_active_membership')
+    throw new AuthError('ACCOUNT_DISABLED', 'You no longer have access. Contact your administrator.', 403)
+  }
+
+  await createSession(user.id, membership.organisationId, {
     userAgent: ctx.userAgent,
     ipAddress: undefined,
   })
@@ -267,7 +272,7 @@ export async function login(input: LoginInput, ctx: { ipHash: string; userAgent:
     await db.user.update({ where: { id: user.id }, data: { status: 'ACTIVE' } }).catch(() => {})
   }
 
-  return { status: 'ok', organisationId: membership?.organisationId ?? undefined }
+  return { status: 'ok', organisationId: membership.organisationId }
 }
 
 /* ---------------- Forgot / Reset password ---------------- */

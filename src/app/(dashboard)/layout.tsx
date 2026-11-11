@@ -6,7 +6,8 @@ import { DEMO_MODE } from '@/lib/demo-mode'
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   if (!DEMO_MODE) {
     const user = await getCurrentUser()
-    if (!user) redirect('/login?next=/dashboard')
+    // `expired` stops the middleware bouncing a stale cookie straight back to /dashboard.
+    if (!user) redirect('/login?next=/dashboard&expired=1')
   }
 
   return <DashboardShell>{children}</DashboardShell>

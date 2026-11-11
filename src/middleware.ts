@@ -122,7 +122,7 @@ export async function middleware(request: NextRequest) {
         { success: false, error: 'Authentication required', code: 'AUTH_REQUIRED', requestId },
         { status: 401 }
       )
-    } else if (isLoginish && session.userId && !session.mfaPending) {
+    } else if (isLoginish && session.userId && !session.mfaPending && !request.nextUrl.searchParams.has('expired')) {
       const url = request.nextUrl.clone()
       url.pathname = '/dashboard'
       url.search = ''
