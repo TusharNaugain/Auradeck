@@ -124,6 +124,9 @@ export const PERMISSIONS = {
   IMPORT_MANAGE: 'import.manage',
   EXPORT_MANAGE: 'export.manage',
 
+  // Email campaigns
+  CAMPAIGNS_SEND: 'campaigns.send',
+
   // Organisation Management (internal only)
   ORGS_VIEW: 'organisations.view',
   ORGS_MANAGE: 'organisations.manage',

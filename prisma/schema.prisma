@@ -350,6 +350,7 @@ model Organisation {
   memberships          Membership[]
   teams                Team[]
   leads                Lead[]
+  campaignSends        CampaignSend[]
   contacts             Contact[]
   opportunities        Opportunity[]
   activities           Activity[]
@@ -1643,4 +1644,29 @@ model SyncRejectedRow {
   @@index([organisationId, createdAt])
   @@index([batchId])
   @@map("sync_rejected_rows")
+}
+
+// ---------- Email campaigns (Resend Broadcasts) ----------
+
+model CampaignSend {
+  id                String       @id @default(cuid())
+  organisationId    String
+  createdByUserId   String
+  subject           String
+  message           String       @db.Text
+  audience          String
+  recipientCount    Int
+  /// queued | syncing | sending | sent | failed
+  status            String       @default("queued")
+  resendSegmentId   String?
+  resendBroadcastId String?
+  error             String?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  completedAt       DateTime?
+
+  organisation      Organisation @relation(fields: [organisationId], references: [id])
+
+  @@index([organisationId, createdAt])
+  @@map("campaign_sends")
 }

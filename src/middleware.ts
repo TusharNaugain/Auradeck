@@ -18,7 +18,7 @@ const PROTECTED_PAGES = [
   '/dashboard', '/leads', '/accounts', '/contacts', '/opportunities',
   '/activities', '/onboarding', '/success', '/tickets', '/clients',
   '/appointments', '/billing', '/reports', '/tasks', '/automations',
-  '/knowledge-base', '/settings', '/notifications',
+  '/knowledge-base', '/settings', '/notifications', '/campaigns',
 ]
 
 // /api/sync/* is called by the sheet script, not a browser: each route verifies an HMAC signature instead of a cookie.

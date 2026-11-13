@@ -24,6 +24,7 @@ const envSchema = z.object({
   EMAIL_FROM_ADDRESS: z.string().email().default('noreply@auradeck.in'),
   EMAIL_FROM_NAME: z.string().default('AuraDeck CRM'),
   RESEND_API_KEY: z.string().optional(),
+  RESEND_API_URL: z.string().url().default('https://api.resend.com'),
   POSTMARK_SERVER_TOKEN: z.string().optional(),
   SMTP_HOST: z.string().default('localhost'),
   SMTP_PORT: z.coerce.number().default(587),

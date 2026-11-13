@@ -9,6 +9,7 @@ import {
   HeartHandshake,
   Headset,
   LayoutGrid,
+  Megaphone,
   Settings,
   UserPlus,
   Users,
@@ -50,6 +51,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: '/accounts', label: 'Accounts', icon: Briefcase, permission: 'accounts.view' },
       { href: '/contacts', label: 'Contacts', icon: Contact, permission: 'contacts.view' },
       { href: '/opportunities', label: 'Opportunities', icon: LayoutGrid, permission: 'opportunities.view' },
+      { href: '/campaigns', label: 'Campaigns', icon: Megaphone, permission: 'campaigns.send' },
     ],
   },
   {

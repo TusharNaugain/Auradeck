@@ -71,6 +71,7 @@ export const RATE_LIMIT_POLICIES = {
   apiWrite: { max: 60, windowSeconds: 60, prefix: 'rl:api_write' },
   export: { max: 5, windowSeconds: 3600, prefix: 'rl:export' },
   import: { max: 3, windowSeconds: 3600, prefix: 'rl:import' },
+  campaignSend: { max: 10, windowSeconds: 3600, prefix: 'rl:campaign_send' },
   emailVerify: { max: 5, windowSeconds: 300, prefix: 'rl:email_verify' },
 } as const
 
