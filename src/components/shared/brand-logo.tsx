@@ -13,7 +13,7 @@ export function BrandLogo({
   return (
     <span className={cn('inline-flex min-w-0 items-center gap-2', className)}>
       <Image
-        src="/auradeck-mark.svg"
+        src="/auradeck-logo.png"
         alt=""
         width={compact ? 30 : 36}
         height={compact ? 30 : 36}

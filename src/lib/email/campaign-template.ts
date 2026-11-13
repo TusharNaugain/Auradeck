@@ -3,6 +3,8 @@
  * fills in the {{{...}}} placeholders per recipient.
  */
 
+import { env } from '@/env'
+
 const FIRST_NAME = '{{{contact.first_name|there}}}'
 const UNSUBSCRIBE = '{{{RESEND_UNSUBSCRIBE_URL}}}'
 const REASON = 'You are receiving this because you signed up or were in touch with Auradeck.'
@@ -32,7 +34,7 @@ export function renderCampaignHtml({ message }: { message: string }): string {
 <body style="margin:0;padding:0;background:#f4f5f7;font-family:Inter,'Segoe UI',Arial,sans-serif;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f5f7;"><tr><td align="center" style="padding:24px 12px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:12px;">
-<tr><td style="padding:24px 32px;border-bottom:1px solid #e5e7eb;font-size:22px;font-weight:700;color:#4f46e5;">Auradeck</td></tr>
+<tr><td style="padding:20px 32px;border-bottom:1px solid #e5e7eb;"><img src="${env.NEXT_PUBLIC_APP_URL.replace(/\/$/, '')}/auradeck-logo.png" width="36" height="36" alt="" style="vertical-align:middle;border:0;"><span style="vertical-align:middle;margin-left:10px;font-size:22px;font-weight:700;color:#4f46e5;">Auradeck</span></td></tr>
 <tr><td style="padding:32px;">
 <p style="${p}">Hi ${FIRST_NAME},</p>${paragraphs}
 <p style="${p}">Team Auradeck</p>
