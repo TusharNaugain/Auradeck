@@ -8,21 +8,11 @@ export function BrandLogo({
   size?: 'compact' | 'regular'
   className?: string
 }) {
-  const compact = size === 'compact'
+  const px = size === 'compact' ? 40 : 56
 
   return (
-    <span className={cn('inline-flex min-w-0 items-center gap-2', className)}>
-      <Image
-        src="/auradeck-logo.png"
-        alt=""
-        width={compact ? 30 : 36}
-        height={compact ? 30 : 36}
-        priority
-        className="shrink-0"
-      />
-      <span className={cn('truncate font-serif font-normal leading-none', compact ? 'text-xl' : 'text-2xl')}>
-        Auradeck
-      </span>
+    <span className={cn('inline-flex min-w-0 items-center', className)}>
+      <Image src="/auradeck-logo.png" alt="Auradeck" width={px} height={px} priority className="shrink-0" />
     </span>
   )
 }
