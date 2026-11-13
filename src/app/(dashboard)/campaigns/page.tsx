@@ -47,6 +47,8 @@ const STATUS: Record<Status, { label: string; variant: 'secondary' | 'warning' |
   sent: { label: 'Sent', variant: 'success' },
   failed: { label: 'Failed', variant: 'destructive' },
 }
+const FIELD = 'border-muted-foreground/40 bg-background'
+const SAMPLE_MESSAGE = 'Your message will appear here.\n\nWrite it on the left and this preview updates as you type.'
 const isActive = (s: Status) => s === 'queued' || s === 'syncing' || s === 'sending'
 const audienceLabel = (id: Audience) => AUDIENCES.find((a) => a.id === id)?.label ?? id
 
@@ -83,6 +85,18 @@ export default function CampaignsPage() {
   )
 }
 
+function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
+  return (
+    <section className="space-y-3">
+      <h2 className="flex items-center gap-2 text-sm font-semibold">
+        <span className="flex size-6 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground">{n}</span>
+        {title}
+      </h2>
+      {children}
+    </section>
+  )
+}
+
 function Composer() {
   const invalidate = useInvalidate()
   const [audience, setAudience] = React.useState<Audience>('priority')
@@ -96,6 +110,13 @@ function Composer() {
     queryFn: () => api.get<Record<Audience, number>>('/api/campaigns/send/audiences'),
   })
   const count = counts.data?.[audience] ?? 0
+  // If the chosen group is empty (e.g. nobody is Priority yet), switch to the first group that has people.
+  React.useEffect(() => {
+    const data = counts.data
+    if (!data || data[audience]) return
+    const next = AUDIENCES.find(({ id }) => data[id] > 0)
+    if (next) setAudience(next.id)
+  }, [counts.data, audience])
   const ready = subject.trim() !== '' && message.trim() !== ''
 
   const [debounced, setDebounced] = React.useState(message)
@@ -103,11 +124,10 @@ function Composer() {
     const timer = setTimeout(() => setDebounced(message), 400)
     return () => clearTimeout(timer)
   }, [message])
-  const hasPreview = debounced.trim() !== ''
+  const previewMessage = debounced.trim() || SAMPLE_MESSAGE
   const preview = useQuery({
-    queryKey: ['campaign-preview', debounced],
-    queryFn: () => api.post<{ html: string }>('/api/campaigns/send/preview', { message: debounced }),
-    enabled: hasPreview,
+    queryKey: ['campaign-preview', previewMessage],
+    queryFn: () => api.post<{ html: string }>('/api/campaigns/send/preview', { message: previewMessage }),
     staleTime: Infinity,
   })
 
@@ -148,7 +168,7 @@ function Composer() {
   return (
     <div className="grid gap-5 lg:grid-cols-2">
       <Card>
-        <CardContent className="space-y-5 pt-6">
+        <CardContent className="space-y-7 pt-6">
           {notConfigured && (
             <div role="alert" className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
               <AlertTriangle className="mt-0.5 size-4 shrink-0" />
@@ -156,8 +176,7 @@ function Composer() {
             </div>
           )}
 
-          <fieldset className="space-y-2">
-            <legend className="mb-2 text-sm font-medium">Audience</legend>
+          <Step n={1} title="Who should get this email?">
             {counts.isError && <p className="text-sm text-destructive">Could not load audience sizes.</p>}
             <div className="grid gap-2 sm:grid-cols-3">
               {AUDIENCES.map(({ id, label }) => {
@@ -166,8 +185,8 @@ function Composer() {
                   <label
                     key={id}
                     className={cn(
-                      'flex cursor-pointer items-center gap-2 rounded-md border p-3 text-sm',
-                      'has-[:checked]:border-primary has-[:checked]:bg-primary/5 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring'
+                      'flex cursor-pointer items-center gap-2 rounded-md border border-muted-foreground/40 p-3 text-sm',
+                      'has-[:checked]:border-primary has-[:checked]:bg-primary/10 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring'
                     )}
                   >
                     <input type="radio" name="audience" className="accent-primary" checked={audience === id} disabled={!n} onChange={() => setAudience(id)} />
@@ -177,59 +196,84 @@ function Composer() {
                 )
               })}
             </div>
-          </fieldset>
+            <p className="text-xs text-muted-foreground">
+              Only leads with a valid email are counted. Dead, archived and unsubscribed leads are left out automatically.
+            </p>
+          </Step>
 
-          <div className="space-y-1.5">
-            <div className="flex justify-between">
-              <Label htmlFor="campaign-subject">Subject</Label>
-              <span className="text-xs text-muted-foreground">{subject.length}/150</span>
+          <Step n={2} title="Write your email">
+            <div className="space-y-1.5">
+              <div className="flex justify-between">
+                <Label htmlFor="campaign-subject">Subject</Label>
+                <span className="text-xs text-muted-foreground">{subject.length}/150</span>
+              </div>
+              <Input
+                id="campaign-subject"
+                className={FIELD}
+                value={subject}
+                maxLength={150}
+                placeholder="e.g. A quick hello from Auradeck"
+                onChange={(e) => setSubject(e.target.value)}
+                aria-describedby="campaign-subject-hint"
+              />
+              <p id="campaign-subject-hint" className="text-xs text-muted-foreground">
+                This is the headline people see in their inbox before they open the email. Keep it short.
+              </p>
             </div>
-            <Input id="campaign-subject" value={subject} maxLength={150} onChange={(e) => setSubject(e.target.value)} />
-          </div>
 
-          <div className="space-y-1.5">
-            <div className="flex justify-between">
-              <Label htmlFor="campaign-message">Message</Label>
-              <span className="text-xs text-muted-foreground">{message.length}/10000</span>
+            <div className="space-y-1.5">
+              <div className="flex justify-between">
+                <Label htmlFor="campaign-message">Message</Label>
+                <span className="text-xs text-muted-foreground">{message.length}/10000</span>
+              </div>
+              <Textarea
+                id="campaign-message"
+                className={cn('min-h-56', FIELD)}
+                value={message}
+                maxLength={10000}
+                placeholder={'Write what you want to tell them.\n\nLeave a blank line between paragraphs.'}
+                onChange={(e) => setMessage(e.target.value)}
+                aria-describedby="campaign-hint"
+              />
+              <p id="campaign-hint" className="text-xs text-muted-foreground">
+                Each person gets &ldquo;Hi &lt;their first name&gt;,&rdquo; at the top and an Unsubscribe link at the bottom automatically. You do not need to type them.
+              </p>
             </div>
-            <Textarea
-              id="campaign-message"
-              className="min-h-56"
-              value={message}
-              maxLength={10000}
-              onChange={(e) => setMessage(e.target.value)}
-              aria-describedby="campaign-hint"
-            />
-            <p id="campaign-hint" className="text-xs text-muted-foreground">Plain text. Leave a blank line between paragraphs.</p>
-          </div>
+          </Step>
 
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" disabled={!ready || send.isPending} onClick={() => send.mutate('test')}>
-              {send.isPending && send.variables === 'test' && <Loader2 className="animate-spin" />}
-              Send test to me
-            </Button>
-            <Button disabled={!ready || count === 0 || send.isPending} onClick={() => setConfirming(true)}>
-              <Send />
-              Send to {count} {count === 1 ? 'person' : 'people'}
-            </Button>
-          </div>
+          <Step n={3} title="Check, then send">
+            <p className="text-sm text-muted-foreground">
+              Click <span className="font-medium text-foreground">Send test to me</span> first. It goes only to your own email so you can see exactly how it looks.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" disabled={!ready || send.isPending} onClick={() => send.mutate('test')}>
+                {send.isPending && send.variables === 'test' && <Loader2 className="animate-spin" />}
+                Send test to me
+              </Button>
+              <Button disabled={!ready || count === 0 || send.isPending} onClick={() => setConfirming(true)}>
+                <Send />
+                Send to {count} {count === 1 ? 'person' : 'people'}
+              </Button>
+            </div>
+            {!ready && <p className="text-xs text-muted-foreground">Add a subject and a message to turn these buttons on.</p>}
+          </Step>
         </CardContent>
       </Card>
 
       <Card className="flex flex-col">
         <CardHeader>
           <CardTitle className="text-sm font-semibold">Preview</CardTitle>
-          <CardDescription>Shown with sample values.</CardDescription>
+          <CardDescription>
+            This is how the email will look. &ldquo;Hi Alex&rdquo; is a sample name; each person sees their own.
+          </CardDescription>
         </CardHeader>
         <CardContent className="min-h-96 flex-1">
-          {hasPreview && preview.data ? (
+          {preview.data ? (
             <iframe title="Email preview" sandbox="" srcDoc={preview.data.html} className="h-full min-h-96 w-full rounded-md border bg-white" />
-          ) : hasPreview && preview.isFetching ? (
-            <Skeleton className="h-full min-h-96 w-full" />
+          ) : preview.isError ? (
+            <p className="text-sm text-muted-foreground">{errorMessage(preview.error)}</p>
           ) : (
-            <p className="text-sm text-muted-foreground">
-              {preview.isError ? errorMessage(preview.error) : 'Start writing your message to see the email.'}
-            </p>
+            <Skeleton className="h-full min-h-96 w-full" />
           )}
         </CardContent>
       </Card>
