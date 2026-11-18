@@ -21,15 +21,16 @@ const CONFIG = {
   MAX_PULL_PAGES: 20,       // safety stop per run; the cursor resumes next run
   LOCK_WAIT_MS: 30000,
   // Optional exact overrides: { 'My Column Title': 'city' }. Normally not needed.
-  COLUMN_MAP: {},
+  // The request-access form writes one "Name" column: split it into first + last name.
+  COLUMN_MAP: { 'Name': 'fullName' },
   // Optional. When set, a new row's permanent External Ref is PREFIX + its email (instead of a random id), so a
   // sheet whose leads were already imported links to them on the first sync instead of being rejected as duplicates.
   REF_PREFIX: '',
   // Optional, e.g. '91'. A bare 10-digit phone number is sent as +<code><number> so it matches the CRM's format.
-  PHONE_COUNTRY_CODE: '',
+  PHONE_COUNTRY_CODE: '91',
   // Optional. true: a phone that is still not a valid number after the country code was added is left out
   // (the lead is still created from its email) instead of the whole row being rejected.
-  DROP_INVALID_PHONE: false,
+  DROP_INVALID_PHONE: true,
   // true only in the EARLY-ACCESS sheet's script: leads it creates start as Priority reachout.
   MARK_PRIORITY: true,
   // Optional values for NEW rows only, for fields that have no column in the sheet, e.g. { leadSource: 'referral' }.
@@ -172,15 +173,17 @@ function splitName_(text) {
   return { firstName: parts[0] || '', lastName: parts.slice(1).join(' ') };
 }
 
-/** Bare 10-digit (or 91 + 10-digit) numbers get a "+" and country code when CONFIG.PHONE_COUNTRY_CODE is set. */
+/** Strips spaces/dashes/brackets; bare 10-digit (or 0/91 + 10-digit) numbers get '+' and CONFIG.PHONE_COUNTRY_CODE. */
 function normalizePhone_(text) {
   const code = CONFIG.PHONE_COUNTRY_CODE;
-  const compact = String(text || '').replace(/[\s\-()]/g, '');
-  if (!code || !compact) return text;
-  if (/^\d{10}$/.test(compact)) return '+' + code + compact;
-  if (compact.indexOf(code) === 0 && /^\d{10}$/.test(compact.slice(code.length))) return '+' + compact;
-  if (CONFIG.DROP_INVALID_PHONE && !/^\+?[1-9]\d{7,14}$/.test(compact)) return '';
-  return text;
+  const compact = String(text || '').replace(/[\s\-().]/g, '');
+  if (!compact) return '';
+  if (code && /^\d{10}$/.test(compact)) return '+' + code + compact;
+  if (code && /^0\d{10}$/.test(compact)) return '+' + code + compact.slice(1);
+  if (code && compact.indexOf(code) === 0 && /^\d{10}$/.test(compact.slice(code.length))) return '+' + compact;
+  // Send the compact form ('+91 90459 64199' -> '+919045964199'): the CRM rejects numbers with spaces.
+  if (/^\+?[1-9]\d{7,14}$/.test(compact)) return compact;
+  return CONFIG.DROP_INVALID_PHONE ? '' : text;
 }
 
 /** Values for fields the sheet has no column for, applied to NEW rows only (never to a lead that already exists). */

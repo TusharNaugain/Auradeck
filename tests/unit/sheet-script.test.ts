@@ -100,7 +100,7 @@ describe('sheet script: row values', () => {
   it('turns cells into text, dates into ISO, and blanks into empty strings', () => {
     const when = new Date('2026-11-10T09:30:00.000Z')
     const fields = script.rowToFields_(mapping, ['  Casey ', 9876543210, when, ''])
-    expect(fields).toEqual({ firstName: 'Casey', phone: '9876543210', nextFollowUpAt: '2026-11-10T09:30:00.000Z', city: '' })
+    expect(fields).toEqual({ firstName: 'Casey', phone: '+919876543210', nextFollowUpAt: '2026-11-10T09:30:00.000Z', city: '' })
   })
 
   it('treats an invalid Date as blank instead of crashing', () => {
@@ -255,13 +255,30 @@ describe('sheet script: Beta Tracker configuration (BetaTracker.gs)', () => {
     expect(beta.newRef_({})).toBe('uuid')
   })
 
-  it('does not change the default Code.gs behaviour (no prefix, no phone rewriting)', () => {
-    const plain = runInContext('({ CONFIG, newRef_, normalizePhone_ })', context) as {
-      CONFIG: { REF_PREFIX: string; PHONE_COUNTRY_CODE: string }; newRef_: (f: Record<string, string>) => string; normalizePhone_: (v: string) => string
+  it('early-access Code.gs: random refs, Name split into first/last, phones sent in a format the CRM accepts', () => {
+    const early = runInContext('({ CONFIG, newRef_, normalizePhone_, mapHeaders_, rowToFields_ })', context) as {
+      CONFIG: { REF_PREFIX: string; COLUMN_MAP: Record<string, string> }
+      newRef_: (f: Record<string, string>) => string
+      normalizePhone_: (v: string) => string
+      mapHeaders_: (h: unknown[], m?: Record<string, string>) => Record<string, number>
+      rowToFields_: (m: Record<string, number>, r: unknown[]) => Record<string, string>
     }
-    expect(plain.CONFIG.REF_PREFIX).toBe('')
-    expect(plain.newRef_({ email: 'a@b.co' })).toBe('uuid')
-    expect(plain.normalizePhone_('9828660949')).toBe('9828660949')
+    expect(early.CONFIG.REF_PREFIX).toBe('')
+    expect(early.newRef_({ email: 'a@b.co' })).toBe('uuid')
+    // Real values from the request-access form that the CRM used to reject.
+    expect(early.normalizePhone_('+91 9045964199')).toBe('+919045964199')
+    expect(early.normalizePhone_('+374 41257662')).toBe('+37441257662')
+    expect(early.normalizePhone_('9921336346')).toBe('+919921336346')
+    expect(early.normalizePhone_('09921336346')).toBe('+919921336346')
+    expect(early.normalizePhone_('+919521797966')).toBe('+919521797966')
+    expect(early.normalizePhone_('not a phone')).toBe('')
+
+    const headers = ['Timestamp', 'Email', 'Name', 'Phone', 'Role', 'City']
+    const mapping = early.mapHeaders_(headers, early.CONFIG.COLUMN_MAP)
+    const fields = early.rowToFields_(mapping, ['', 'a@b.co', 'Harsh Vardhan Singh', '+91 9045964199', 'Counselling psychologist', 'Bengaluru'])
+    expect(fields).toMatchObject({
+      firstName: 'Harsh', lastName: 'Vardhan Singh', phone: '+919045964199', jobTitle: 'Counselling psychologist', city: 'Bengaluru',
+    })
   })
 
   describe('sheet cells that refuse a write', () => {
