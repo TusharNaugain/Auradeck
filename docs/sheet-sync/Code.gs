@@ -618,6 +618,10 @@ const SIGNUP_URL = 'https://app.getauradeck.com/sign-in';
 const REPLY_TO = 'khushi@getauradeck.com';
 const SENDER_NAME = 'Khushi from AuraDeck';
 
+// Columns a request from app.getauradeck.com/request-access fills. Any that row 1
+// lacks are added at its end, after the CRM columns, so no column moves.
+const REQUEST_COLUMNS = ['Name', 'Phone', 'Role', 'City', 'Practice size', 'Years of practice', 'Message'];
+
 function doPost(e) {
   const data = JSON.parse((e && e.postData && e.postData.contents) || '{}');
   const email = String(data.email || '').trim();
@@ -627,13 +631,55 @@ function doPost(e) {
   }
 
   const book = SpreadsheetApp.getActiveSpreadsheet();
-  book.getSheets()[0].appendRow([new Date(), email, String(data.source || ''), false]);
+  const sheet = book.getSheets()[0];
+  appendSignupRow_(sheet, data, email);
 
-  MailApp.sendEmail(NOTIFY, 'New early-access sign-up: ' + email,
-    email + ' signed up from the ' + (data.source || 'site') + ' form.\n\n' +
-    'Reply within a day with their login.\n' + book.getUrl());
+  const details = [['Name', data.name], ['Phone', data.phone], ['Role', data.role], ['City', data.city],
+    ['Practice size', data.practice_size], ['Years of practice', data.years_of_practice],
+    ['Message', data.message], ['Came from', data.source]]
+    .filter(function (d) { return String(d[1] || '').trim(); })
+    .map(function (d) { return d[0] + ': ' + String(d[1]).trim(); });
+  MailApp.sendEmail(NOTIFY, 'New beta request: ' + email,
+    email + ' asked for beta access.\n\n' + (details.length ? details.join('\n') + '\n\n' : '') +
+    'To invite them, select their row and use Beta > Send invites to selected rows.\n' + book.getUrl());
 
   return json({ ok: true });
+}
+
+/** One sign-up as a row, matched to row 1's headers by name, so it lands in the right
+ *  columns wherever they are. Columns it has no value for are left blank. */
+function appendSignupRow_(sheet, data, email) {
+  let headers = sheet.getRange(1, 1, 1, Math.max(sheet.getLastColumn(), 1)).getValues()[0];
+  const have = headers.map(normalizeHeader_);
+  const missing = REQUEST_COLUMNS.filter(function (h) { return have.indexOf(normalizeHeader_(h)) === -1; });
+  if (missing.length) {
+    sheet.getRange(1, headers.length + 1, 1, missing.length).setValues([missing]);
+    headers = headers.concat(missing);
+  }
+
+  const text = function (v) {
+    const value = String(v === null || v === undefined ? '' : v).trim();
+    // These come from a public form: a leading = + - @ would make Sheets run the value as a formula.
+    return /^[=+\-@\t\r]/.test(value) ? "'" + value : value;
+  };
+  const values = {
+    timestamp: new Date(),
+    email: text(email),
+    source: text(data.source),
+    contacted: false,
+    name: text(data.name),
+    // Kept as text, so Sheets never drops a leading 0 or +91.
+    phone: data.phone ? "'" + String(data.phone).trim() : '',
+    role: text(data.role),
+    city: text(data.city),
+    practicesize: text(data.practice_size),
+    yearsofpractice: text(data.years_of_practice),
+    message: text(data.message),
+  };
+  sheet.appendRow(headers.map(function (h) {
+    const value = values[normalizeHeader_(h)];
+    return value === undefined ? '' : value;
+  }));
 }
 
 function json(obj) {
@@ -644,7 +690,7 @@ function json(obj) {
 // ---------- Beta invites ----------
 
 function norm(s) {
-  return String(s).replace(/[\s\u00A0]+/g, ' ').trim().toLowerCase();
+  return String(s).replace(/[\s ]+/g, ' ').trim().toLowerCase();
 }
 
 function inviteBody(code) {
@@ -657,9 +703,12 @@ Your invite code: ${code}
 
 To get started:
 1. Go to ${SIGNUP_URL}
-2. Sign up with the email address this invite was sent to
-3. Enter your invite code when prompted
+2. Enter the email address this invite was sent to
+3. Continue with Google, or enter your invite code to create your account
 4. Connect your Google Calendar so your sessions stay in sync
+
+Or open this link to go straight to creating your account:
+${SIGNUP_URL}?invite=${encodeURIComponent(code)}
 
 This is a beta, so you may run into a few rough edges. If anything breaks or you have feedback, just reply to this email. It comes straight to me.
 
@@ -690,6 +739,7 @@ function sendInvites() {
 
   const range = sheet.getActiveRange();
   let sent = 0, skipped = 0;
+  const problems = [];
 
   for (let r = range.getRow(); r < range.getRow() + range.getNumRows(); r++) {
     if (r === 1 || sheet.getRange(r, sentCol).getValue()) continue;
@@ -699,6 +749,13 @@ function sendInvites() {
     if (invited.has(norm(email))) { skipped++; continue; }
 
     const code = sheet.getRange(r, codeCol).getValue() || newCode();
+    // The app only accepts codes it has stored, tied to the email they were sent to.
+    try {
+      registerInviteCode_(code, 'sheet: ' + email, email);
+    } catch (err) {
+      problems.push('Row ' + r + ' (' + email + '): ' + err.message);
+      continue;
+    }
     GmailApp.sendEmail(email, 'Your AuraDeck beta invite code', inviteBody(code), {
       name: SENDER_NAME,
       replyTo: REPLY_TO,
@@ -710,7 +767,8 @@ function sendInvites() {
     sent++;
   }
 
-  ui.alert(`Sent ${sent} invite(s).` + (skipped ? ` Skipped ${skipped} duplicate(s).` : ''));
+  ui.alert(`Sent ${sent} invite(s).` + (skipped ? ` Skipped ${skipped} duplicate(s).` : '') +
+    (problems.length ? '\n\nNot sent, nothing was emailed to these:\n' + problems.join('\n') : ''));
 }
 
 function newCode() {
@@ -718,4 +776,39 @@ function newCode() {
   let code = 'AURA-';
   for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
   return code;
+}
+
+/* ------------- Registering invite codes with the app ------------- */
+
+const AURADECK_INVITES_URL = 'https://app.getauradeck.com/api/auth/invites';
+
+/**
+ * Tells the app about one code, tied to the email it is being sent to, so only that
+ * address can use it. Needs Script property AURADECK_INVITE_KEY, the same value as
+ * INVITE_API_KEY on the backend. Without it, nothing is registered and invites are
+ * sent as before (only codes already added to the app work).
+ */
+function registerInviteCode_(code, note, email) {
+  const key = PropertiesService.getScriptProperties().getProperty('AURADECK_INVITE_KEY');
+  if (!key) return null;
+  const response = UrlFetchApp.fetch(AURADECK_INVITES_URL, {
+    method: 'post',
+    contentType: 'application/json',
+    headers: { Authorization: 'Bearer ' + key },
+    payload: JSON.stringify({
+      code: String(code),
+      note: note ? String(note).slice(0, 255) : null,
+      email: email ? String(email).trim() : null,
+    }),
+    muteHttpExceptions: true,
+  });
+  const status = response.getResponseCode();
+  if (status !== 200) {
+    throw new Error('The app did not accept invite code ' + code + ' (HTTP ' + status + ')');
+  }
+  const result = JSON.parse(response.getContentText());
+  if (!result.valid) {
+    throw new Error('Invite code ' + code + ' is used up or belongs to another email. Clear the cell so a new one is made.');
+  }
+  return result;
 }

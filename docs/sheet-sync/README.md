@@ -18,7 +18,7 @@ credentials. This integration does not pull CRM changes back into the sheet.
 1. In the sheet: **Extensions → Apps Script**, delete the sample code, paste all of `Code.gs`, save.
 2. If your tab is not called `Leads`, change `CONFIG.SHEET_NAME` at the top.
 3. **Project Settings → Script properties** → add:
-   - `CRM_BASE_URL` — your CRM's public URL, e.g. `https://crm.example.com` (must be reachable from the internet; `localhost` will not work from Google)
+   - `CRM_BASE_URL` — your CRM's public URL, e.g. `https://crm.example.com` (must be reachable from the internet; `localhost` will not work from Google). Use the deployed CRM (`https://auradeck-production.up.railway.app`), not a `*.trycloudflare.com` quick tunnel: those get a new random address every time the tunnel restarts and stop working when your computer is off, so every sync fails with "DNS error"
    - `SYNC_SHARED_SECRET` — exactly the same value as `SYNC_SHARED_SECRET` in the CRM `.env`
 4. Reload the sheet, then **CRM Sync → Set up sheet**. It adds three columns (*CRM Lead Number*, *CRM External Ref* (hidden), *CRM Sync Status*), makes phone columns plain text, and shows a **column mapping report**. Check every ✔ points at the right column. Unmatched columns (✘) are simply never touched.
 5. **CRM Sync → Check connection & server status** should show live lead counts, not an error.
