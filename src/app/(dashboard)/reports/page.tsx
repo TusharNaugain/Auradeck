@@ -67,7 +67,9 @@ function reportSections(dashboard: OverviewDashboard) {
 export default function ReportsPage() {
   const query = useOverview()
   const { data: session } = useSession()
-  const canExport = useHasPermission('export.manage')
+  const canExportData = useHasPermission('export.manage')
+  const canExportLeads = useHasPermission('leads.export')
+  const exportable = EXPORT_ENTITIES.filter(item => (item.entity === 'leads' ? canExportLeads : canExportData))
 
   const dashboard = query.data?.dashboard
   const sales = dashboard?.sales
@@ -180,9 +182,9 @@ export default function ReportsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {canExport ? (
+              {exportable.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
-                  {EXPORT_ENTITIES.map(item => (
+                  {exportable.map(item => (
                     <Button key={item.entity} variant="outline" size="sm" asChild>
                       <a href={`/api/export?entity=${item.entity}`} download>
                         <Download className="size-4" />
@@ -194,7 +196,7 @@ export default function ReportsPage() {
               ) : (
                 <p className="flex items-center gap-2 text-sm text-muted-foreground">
                   <ShieldAlert className="size-4" />
-                  Exports need the <code className="rounded bg-muted px-1 py-0.5 text-xs">export.manage</code> permission.
+                  Your role does not include data export. Ask a super admin to enable it in Settings → Roles &amp; access.
                 </p>
               )}
               <p className="text-xs text-muted-foreground">

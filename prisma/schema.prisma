@@ -348,6 +348,7 @@ model Organisation {
 
   // Relations
   memberships          Membership[]
+  rolePolicies         OrgRolePolicy[]
   teams                Team[]
   leads                Lead[]
   campaignSends        CampaignSend[]
@@ -561,6 +562,7 @@ model Role {
   permissions    Permission[]
   memberships    Membership[]
   invitations    Invitation[]
+  orgPolicies    OrgRolePolicy[]
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
@@ -592,6 +594,26 @@ model UserPermissionOverride {
   @@map("user_permission_overrides")
 }
 
+/// An organisation's customised access for one role (Settings -> Roles & access).
+/// No row = the role's built-in defaults. `capabilities` are keys from
+/// src/lib/permissions/access.ts, expanded to permissions at request time.
+model OrgRolePolicy {
+  id              String       @id @default(cuid())
+  organisationId  String
+  roleId          String
+  capabilities    String[]     @default([])
+  recordScope     ScopeType
+  updatedByUserId String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  organisation    Organisation @relation(fields: [organisationId], references: [id])
+  role            Role         @relation(fields: [roleId], references: [id])
+
+  @@unique([organisationId, roleId])
+  @@map("org_role_policies")
+}
+
 model Membership {
   id             String           @id @default(cuid())
   userId         String
@@ -605,6 +627,8 @@ model Membership {
   acceptedAt     DateTime?
   deactivatedAt  DateTime?
   scopeType      ScopeType        @default(ASSIGNED)
+  /// Per-member record visibility. Null = use the role's visibility for this organisation.
+  scopeOverride  ScopeType?
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
 

@@ -1,6 +1,7 @@
 /**
  * GET /api/export?entity=leads — CSV export of permitted entity data.
- * Blocked for callers without export.manage, audit-logged, and capped per request.
+ * Leads need leads.export and only include the leads the caller can see; other entities
+ * need export.manage. Audit-logged and capped per request.
  * Clients/patients are deliberately NOT exportable — too privacy-sensitive at the
  * list level; a dedicated workflow is defined in the security documentation.
  */
@@ -9,7 +10,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import Papa from 'papaparse'
 import { db } from '@/lib/db'
 import { guardedRoute, routeHandler } from '@/lib/utils/api-helpers'
-import { PERMISSIONS } from '@/lib/permissions'
+import { Prisma } from '@prisma/client'
+import { PERMISSIONS, hasPermission, type Permission } from '@/lib/permissions'
+import { resolveLeadScope } from '@/lib/reports/scope'
 import { createAuditLog } from '@/lib/audit'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -17,7 +20,6 @@ const MAX_EXPORT_ROWS = 5000
 
 export const GET = routeHandler(async (req: NextRequest) => {
   const guard = await guardedRoute(req, {
-    permission: PERMISSIONS.EXPORT_MANAGE,
     policy: 'export',
     keyByUser: true,
   })
@@ -34,11 +36,12 @@ export const GET = routeHandler(async (req: NextRequest) => {
   }
 
   // Entity-level read permission from the role catalogue
-  const entityPermissions: Record<string, { isAllowed: () => boolean; selector: object }> = {
-    leads: { isAllowed: () => ctx.permissions.has(PERMISSIONS.LEADS_VIEW), selector: {} },
-    contacts: { isAllowed: () => ctx.permissions.has(PERMISSIONS.CONTACTS_VIEW), selector: {} },
-    accounts: { isAllowed: () => ctx.permissions.has(PERMISSIONS.ACCOUNTS_VIEW), selector: {} },
-    opportunities: { isAllowed: () => ctx.permissions.has(PERMISSIONS.OPPORTUNITIES_VIEW), selector: {} },
+  const can = (p: Permission) => hasPermission(ctx, p)
+  const entityPermissions: Record<string, { isAllowed: () => boolean }> = {
+    leads: { isAllowed: () => can(PERMISSIONS.LEADS_VIEW) && can(PERMISSIONS.LEADS_EXPORT) },
+    contacts: { isAllowed: () => can(PERMISSIONS.CONTACTS_VIEW) && can(PERMISSIONS.EXPORT_MANAGE) },
+    accounts: { isAllowed: () => can(PERMISSIONS.ACCOUNTS_VIEW) && can(PERMISSIONS.EXPORT_MANAGE) },
+    opportunities: { isAllowed: () => can(PERMISSIONS.OPPORTUNITIES_VIEW) && can(PERMISSIONS.EXPORT_MANAGE) },
   }
 
   const target = entityPermissions[entity]
@@ -50,14 +53,17 @@ export const GET = routeHandler(async (req: NextRequest) => {
     )
   }
 
-  if (!target.isAllowed() && !ctx.permissions.has(PERMISSIONS.SUPER_ADMIN)) {
+  if (!target.isAllowed()) {
     return NextResponse.json(
       { success: false, error: `You don't have permission to export ${entity}`, code: 'PERMISSION_DENIED', requestId: uuidv4() },
       { status: 403 }
     )
   }
 
-  const rows = await fetchExportRows(entity, organisationId)
+  const leadScope = entity === 'leads'
+    ? await resolveLeadScope(organisationId, ctx.scopeType, user.id, ctx.teamId)
+    : {}
+  const rows = await fetchExportRows(entity, organisationId, leadScope)
   const csv = Papa.unparse(rows, { header: true })
 
   await createAuditLog({
@@ -78,11 +84,11 @@ export const GET = routeHandler(async (req: NextRequest) => {
   })
 })
 
-async function fetchExportRows(entity: string, organisationId: string): Promise<Record<string, unknown>[]> {
+async function fetchExportRows(entity: string, organisationId: string, leadScope: Prisma.LeadWhereInput): Promise<Record<string, unknown>[]> {
   switch (entity) {
     case 'leads':
       return db.lead.findMany({
-        where: { organisationId, deletedAt: null },
+        where: { AND: [{ organisationId, deletedAt: null }, leadScope] },
         select: {
           leadNumber: true, fullName: true, email: true, city: true, leadSource: true,
           lifecycleStage: true, leadScore: true, createdAt: true,

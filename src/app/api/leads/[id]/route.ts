@@ -13,6 +13,7 @@ import { PERMISSIONS } from '@/lib/permissions'
 import { NotFoundError, ValidationFailedError } from '@/lib/services/errors'
 import { normalizePhone } from '@/lib/validations/common'
 import { resolveLeadScope } from '@/lib/reports/scope'
+import { assertActiveMember, assertCanAssign } from '@/lib/services/assignment'
 import { v4 as uuidv4 } from 'uuid'
 
 type RouteContext = { params: Promise<{ id: string }> }
@@ -115,11 +116,21 @@ export const PATCH = routeHandler(async (req: NextRequest, context: RouteContext
 
   const lead = await db.lead.findFirst({
     where: { AND: [{ id, organisationId, deletedAt: null }, recordScope] },
-    select: { id: true, leadNumber: true, lifecycleStage: true, isPriority: true },
+    select: { id: true, leadNumber: true, lifecycleStage: true, isPriority: true, assignedToUserId: true, assignedTeamId: true },
   })
   if (!lead) throw new NotFoundError('Lead not found')
 
   const body = await parseJsonBody(req, leadUpdateSchema)
+  // Re-assigning a lead (person or team) is its own permission, not part of editing.
+  if (body.assignedToUserId !== undefined) {
+    assertCanAssign(ctx, { currentOwnerId: lead.assignedToUserId, nextOwnerId: body.assignedToUserId ?? null })
+    if (body.assignedToUserId && body.assignedToUserId !== lead.assignedToUserId) {
+      await assertActiveMember(organisationId, body.assignedToUserId)
+    }
+  }
+  if (body.assignedTeamId !== undefined && (body.assignedTeamId ?? null) !== lead.assignedTeamId) {
+    assertCanAssign(ctx, { currentOwnerId: 'team', nextOwnerId: 'changed' })
+  }
   if (body.lifecycleStage === 'converted') {
     throw new ValidationFailedError('Use the lead conversion action to convert a lead')
   }

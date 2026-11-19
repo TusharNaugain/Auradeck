@@ -73,13 +73,30 @@ export const teamListSchema = paginationSchema.extend({
 
 /* ---------- Users ---------- */
 
+/** Member record visibility: 'default' = follow the role. */
+export const memberVisibility = z.enum(['default', 'own', 'assigned', 'team', 'organisation'])
+
 export const inviteUserSchema = z.object({
   email: emailSchema,
   roleSlug: z.string().min(2).max(50),
   teamId: z.string().optional().nullable(),
-  scopeType: z.enum(['own', 'assigned', 'team', 'organisation']).optional(),
+  scopeType: memberVisibility.optional(),
   firstName: safeText(50).optional(),
   lastName: safeText(50).optional(),
+})
+
+/** PATCH /api/users/[id]: change a member's role, team, visibility or reactivate them. */
+export const memberUpdateSchema = z.object({
+  roleSlug: z.string().min(2).max(50).optional(),
+  teamId: z.string().nullable().optional(),
+  scopeType: memberVisibility.optional(),
+  status: z.enum(['active']).optional(),
+}).refine(v => Object.values(v).some(x => x !== undefined), { message: 'Nothing to update' })
+
+/** PUT /api/access/roles/[slug]: save a role's capabilities and visibility. */
+export const rolePolicySchema = z.object({
+  capabilities: z.array(z.string().max(50)).max(100),
+  recordScope: z.enum(['OWN', 'TEAM', 'ORGANISATION']),
 })
 
 export const updateUserSchema = z.object({
@@ -97,6 +114,7 @@ export const updateUserSchema = z.object({
 
 export const userListSchema = paginationSchema.extend({
   search: z.string().trim().max(200).optional(),
+  includeInactive: z.enum(['true', 'false']).optional(),
   status: z.enum(['invited', 'active', 'suspended', 'deactivated']).optional(),
   organisationId: z.string().optional(),
 })

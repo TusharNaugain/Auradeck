@@ -24,7 +24,7 @@ const target = (over: Record<string, unknown> = {}) => ({
 
 beforeEach(() => {
   vi.clearAllMocks()
-  guardedRoute.mockResolvedValue({ context: { organisationId: 'org', user: { id: 'u1' }, ipHash: 'h' } })
+  guardedRoute.mockResolvedValue({ context: { organisationId: 'org', user: { id: 'u1' }, ctx: { roleSlug: 'super_admin' }, ipHash: 'h' } })
   db.membership.update.mockResolvedValue({})
   db.invitation.updateMany.mockResolvedValue({})
 })

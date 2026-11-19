@@ -14,8 +14,8 @@ import { ListView } from '@/components/shared/list-view'
 import { SchemaForm, type FieldSpec } from '@/components/shared/schema-form'
 import { StatusBadge } from '@/components/shared/status-badge'
 import type { Column } from '@/components/shared/table-utils'
-import { organisationUpdateSchema, inviteUserSchema, teamCreateSchema, updateUserSchema } from '@/lib/validations/admin'
-import { ROLE_SLUGS } from '@/config/roles'
+import { organisationUpdateSchema, teamCreateSchema, updateUserSchema } from '@/lib/validations/admin'
+import { MembersPanel, RolesAccessPanel } from './team-access'
 import { api } from '@/lib/client/api'
 import { errorMessage, useHasPermission, useInvalidate, useSession } from '@/lib/client/hooks'
 import { formatDateTime, formatRelative } from '@/lib/client/format'
@@ -47,6 +47,7 @@ export default function SettingsPage() {
           <TabsTrigger value="security">Security</TabsTrigger>
           {canManageOrg && <TabsTrigger value="organisation">Organisation</TabsTrigger>}
           {canViewUsers && <TabsTrigger value="members">Members</TabsTrigger>}
+          {canViewUsers && <TabsTrigger value="roles">Roles &amp; access</TabsTrigger>}
           {canViewTeams && <TabsTrigger value="teams">Teams</TabsTrigger>}
           {canViewAudit && <TabsTrigger value="audit">Audit log</TabsTrigger>}
         </TabsList>
@@ -68,7 +69,13 @@ export default function SettingsPage() {
 
         {canViewUsers && (
           <TabsContent value="members" className="space-y-4">
-            <ResourcePage config={memberConfig} />
+            <MembersPanel />
+          </TabsContent>
+        )}
+
+        {canViewUsers && (
+          <TabsContent value="roles" className="space-y-4">
+            <RolesAccessPanel />
           </TabsContent>
         )}
 
@@ -432,63 +439,6 @@ interface MemberRow {
   user: { id: string; fullName: string; email: string; status: string; lastLoginAt: string | null }
   role: { slug: string; name: string }
   team: { id: string; name: string } | null
-}
-
-const memberConfig: ResourceConfig<MemberRow> = {
-  key: 'users',
-  path: '/api/users',
-  title: 'Members',
-  description: 'Everyone with an active seat in this organisation.',
-  singular: 'member',
-  columns: [
-    {
-      key: 'user',
-      header: 'Member',
-      cell: row => (
-        <div className="min-w-0">
-          <p className="truncate font-medium">{row.user.fullName}</p>
-          <p className="truncate text-xs text-muted-foreground">{row.user.email}</p>
-        </div>
-      ),
-    },
-    { key: 'role', header: 'Role', cell: row => row.role.name },
-    { key: 'team', header: 'Team', hideOnMobile: true, cell: row => row.team?.name ?? '—' },
-    { key: 'status', header: 'Status', hideOnMobile: true, cell: row => <StatusBadge value={row.user.status} /> },
-    {
-      key: 'lastLoginAt',
-      header: 'Last seen',
-      hideOnMobile: true,
-      cell: row => (row.user.lastLoginAt ? formatRelative(row.user.lastLoginAt) : 'Never'),
-    },
-  ],
-  // Invitations only: member records are created by accepting an invite, and role
-  // or team changes go through the admin workflow, not this screen.
-  createFields: [
-    { name: 'email', label: 'Email', kind: 'email' },
-    { name: 'firstName', label: 'First name', kind: 'text', half: true },
-    { name: 'lastName', label: 'Last name', kind: 'text', half: true },
-    { name: 'roleSlug', label: 'Role', kind: 'select', options: ROLE_SLUGS, half: true },
-    {
-      name: 'scopeType',
-      label: 'Data scope',
-      kind: 'select',
-      half: true,
-      options: ['own', 'assigned', 'team', 'organisation'],
-      hint: 'Which records this member can read.',
-    },
-    {
-      name: 'teamId',
-      label: 'Team',
-      kind: 'lookup',
-      lookup: { path: '/api/teams', label: row => String(row.name ?? '') },
-      hint: 'Optional. Required for team-scope roles.',
-    },
-  ],
-  editFields: [],
-  createSchema: inviteUserSchema,
-  createPermission: 'users.invite',
-  deletePermission: 'users.manage',
-  deleteConfirm: row => `Remove ${row.user.email}? They will lose access to the CRM immediately.`,
 }
 
 interface TeamRow {

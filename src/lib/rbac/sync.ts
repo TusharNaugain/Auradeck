@@ -6,7 +6,8 @@
  */
 
 import { db } from '@/lib/db'
-import { PERMISSIONS, ROLE_PERMISSIONS } from '@/lib/permissions'
+import { PERMISSIONS } from '@/lib/permissions'
+import { defaultRolePermissions } from '@/lib/permissions/access'
 
 export const ROLE_DEFINITIONS: Array<{
   slug: string
@@ -14,12 +15,14 @@ export const ROLE_DEFINITIONS: Array<{
   description: string
   organisationType: 'AURADESK_INTERNAL' | 'CUSTOMER_PRACTICE' | null
 }> = [
-  { slug: 'super_admin', name: 'Super Admin', description: 'Full platform access', organisationType: null },
+  { slug: 'super_admin', name: 'Super admin', description: 'Full platform access', organisationType: null },
+  { slug: 'admin', name: 'Admin', description: 'Runs the workspace and the team', organisationType: 'AURADESK_INTERNAL' },
+  { slug: 'marketing', name: 'Marketing', description: 'Lead generation, distribution and campaigns', organisationType: 'AURADESK_INTERNAL' },
   { slug: 'executive', name: 'Executive / Management', description: 'Dashboards, reports, and portfolio visibility', organisationType: 'AURADESK_INTERNAL' },
-  { slug: 'sales_head', name: 'Sales Head', description: 'Manage entire sales pipeline and team', organisationType: 'AURADESK_INTERNAL' },
-  { slug: 'sales_rep', name: 'Sales Representative', description: 'Manage assigned leads and opportunities', organisationType: 'AURADESK_INTERNAL' },
-  { slug: 'csm_head', name: 'Customer Success Head', description: 'Portfolio management, renewals, health', organisationType: 'AURADESK_INTERNAL' },
-  { slug: 'csm', name: 'Customer Success Manager', description: 'Assigned accounts, onboarding, success plans', organisationType: 'AURADESK_INTERNAL' },
+  { slug: 'sales_head', name: 'Sales Manager', description: 'Owns the sales pipeline and hands out leads', organisationType: 'AURADESK_INTERNAL' },
+  { slug: 'sales_rep', name: 'Sales', description: 'Works assigned leads and deals', organisationType: 'AURADESK_INTERNAL' },
+  { slug: 'csm_head', name: 'CS Manager', description: 'Customer success: onboarding, health, renewals', organisationType: 'AURADESK_INTERNAL' },
+  { slug: 'csm', name: 'CSM', description: 'Assigned customers, onboarding, success plans', organisationType: 'AURADESK_INTERNAL' },
   { slug: 'support_admin', name: 'Support Admin', description: 'All tickets, SLA, escalation management', organisationType: 'AURADESK_INTERNAL' },
   { slug: 'support_agent', name: 'Support Agent', description: 'Assigned tickets and customer communication', organisationType: 'AURADESK_INTERNAL' },
   { slug: 'finance_admin', name: 'Finance Admin', description: 'Subscriptions, invoices, payments, reports', organisationType: 'AURADESK_INTERNAL' },
@@ -71,7 +74,7 @@ export async function syncRbac(): Promise<{ roles: number; permissions: number; 
       },
     })
 
-    const rolePerms = ROLE_PERMISSIONS[def.slug] ?? []
+    const rolePerms = defaultRolePermissions(def.slug)
     // Clear then reconnect (cannot mix set + connectOrCreate on one relation)
     await db.role.update({ where: { id: role.id }, data: { permissions: { set: [] } } })
     await db.role.update({
@@ -90,4 +93,22 @@ export async function syncRbac(): Promise<{ roles: number; permissions: number; 
   }
 
   return { roles: ROLE_DEFINITIONS.length, permissions: permissionValues.length, links }
+}
+
+/**
+ * Return the role row for a slug, creating it from ROLE_DEFINITIONS when it is missing
+ * (a role added in code after the last bootstrap). Team roles resolve their permissions
+ * from code, so the row only needs to exist for the membership foreign key.
+ */
+export async function ensureRole(slug: string): Promise<{ id: string; slug: string; name: string } | null> {
+  const existing = await db.role.findUnique({ where: { slug }, select: { id: true, slug: true, name: true } })
+  if (existing) return existing
+  const def = ROLE_DEFINITIONS.find(d => d.slug === slug)
+  if (!def) return null
+  return db.role.upsert({
+    where: { slug },
+    create: { slug, name: def.name, description: def.description, organisationType: def.organisationType, isSystem: true },
+    update: {},
+    select: { id: true, slug: true, name: true },
+  })
 }

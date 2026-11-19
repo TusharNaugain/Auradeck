@@ -45,6 +45,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { api, ApiError } from '@/lib/client/api'
 import { errorMessage, useHasPermission, useInvalidate } from '@/lib/client/hooks'
+import { LeadOwner } from './lead-owner'
 import { enumLabel, formatCurrency, formatDate, formatDateTime, formatNumber, formatRelative, isOverdue } from '@/lib/client/format'
 import { cn } from '@/lib/utils/cn'
 import { DEMO_MODE } from '@/lib/demo-mode'
@@ -864,7 +865,7 @@ function LeadDetailsSheet({
               <div className="flex flex-wrap gap-2 pt-2">
                 <Badge variant={lead.leadScore >= 70 ? 'success' : lead.leadScore >= 40 ? 'warning' : 'secondary'}>Score {lead.leadScore}</Badge>
                 <Badge variant="outline">{enumLabel(lead.leadSource)}</Badge>
-                {lead.assignedTo && <Badge variant="secondary"><UserRound className="mr-1 size-3" />{lead.assignedTo.fullName}</Badge>}
+                <LeadOwner leadId={lead.id} owner={lead.assignedTo ?? null} />
                 {canUpdate && (
                   <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => onTogglePriority(!lead.isPriority)}>
                     <Star className={cn('mr-1 size-3', lead.isPriority && 'fill-amber-500 text-amber-500')} />

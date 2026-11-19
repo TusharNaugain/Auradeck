@@ -17,6 +17,7 @@ import { ConflictError } from '@/lib/services/errors'
 import { PERMISSIONS } from '@/lib/permissions'
 import { normalizePhone } from '@/lib/validations/common'
 import { resolveLeadScope } from '@/lib/reports/scope'
+import { assertActiveMember, assertCanAssign } from '@/lib/services/assignment'
 import { v4 as uuidv4 } from 'uuid'
 
 export const GET = routeHandler(async (req: NextRequest) => {
@@ -113,9 +114,13 @@ export const POST = routeHandler(async (req: NextRequest) => {
     keyByUser: true,
   })
   if (guard.response) return guard.response
-  const { organisationId, user, ipHash, userAgentHash } = guard.context!
+  const { organisationId, user, ctx, ipHash, userAgentHash } = guard.context!
 
   const body = await parseJsonBody(req, leadCreateSchema)
+  const ownerId = body.assignedToUserId ?? user.id
+  assertCanAssign(ctx, { currentOwnerId: null, nextOwnerId: ownerId, isCreate: true })
+  if (ownerId !== user.id) await assertActiveMember(organisationId, ownerId)
+  if (body.assignedTeamId) assertCanAssign(ctx, { currentOwnerId: null, nextOwnerId: 'team' })
 
   // Normalisation
   const phone = body.phone ? normalizePhone(body.phone) : undefined
@@ -171,7 +176,7 @@ export const POST = routeHandler(async (req: NextRequest) => {
       budgetRange: body.budgetRange,
       expectedTimeline: body.expectedTimeline,
       preferredContactMethod: body.preferredContactMethod?.toUpperCase() as never,
-      assignedToUserId: body.assignedToUserId ?? user.id,
+      assignedToUserId: ownerId,
       assignedTeamId: body.assignedTeamId ?? undefined,
       nextFollowUpAt: body.nextFollowUpAt ? new Date(body.nextFollowUpAt) : undefined,
       consentStatus: body.consentStatus,

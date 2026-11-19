@@ -11,7 +11,9 @@ import { userListSchema, inviteUserSchema } from '@/lib/validations/admin'
 import { createAuditLog } from '@/lib/audit'
 import { createInvitationToken } from '@/lib/auth/tokens'
 import { sendTemplatedEmail, invitationEmail, appUrl } from '@/lib/email'
-import { ROLE_PERMISSIONS, PERMISSIONS } from '@/lib/permissions'
+import { PERMISSIONS } from '@/lib/permissions'
+import { canAssignRole, isKnownRole, scopeFromVisibility } from '@/lib/permissions/access'
+import { ensureRole } from '@/lib/rbac/sync'
 import { logInvite } from '@/lib/logging/invite'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -25,23 +27,21 @@ export const GET = routeHandler(async (req: NextRequest) => {
 
   const where = {
     organisationId,
-    status: 'ACTIVE' as never,
+    status: query.includeInactive === 'true' ? { in: ['ACTIVE', 'DEACTIVATED'] } : 'ACTIVE',
     ...(query.search
       ? {
           OR: [
-            { fullName: { contains: query.search, mode: 'insensitive' } },
             { user: { email: { contains: query.search, mode: 'insensitive' } } },
             { user: { fullName: { contains: query.search, mode: 'insensitive' } } },
           ],
         }
       : {}),
   }
-  void where
 
   const [items, total] = await Promise.all([
     db.membership.findMany({
       where: where as never,
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
       skip: (query.page - 1) * query.pageSize,
       take: query.pageSize,
       include: {
@@ -66,25 +66,31 @@ export const POST = routeHandler(async (req: NextRequest) => {
     keyByUser: true,
   })
   if (guard.response) return guard.response
-  const { organisationId, user, ipHash } = guard.context!
+  const { organisationId, user, ctx, ipHash } = guard.context!
 
   const body = await parseJsonBody(req, inviteUserSchema)
 
-  if (!ROLE_PERMISSIONS[body.roleSlug]) {
+  if (!isKnownRole(body.roleSlug)) {
     return NextResponse.json(
       { success: false, error: 'Unknown role', code: 'VALIDATION_ERROR', requestId: uuidv4() },
       { status: 400 }
     )
   }
+  if (!canAssignRole(ctx.roleSlug, body.roleSlug)) {
+    return NextResponse.json(
+      { success: false, error: 'Only a super admin can make someone a super admin.', code: 'PERMISSION_DENIED', requestId: uuidv4() },
+      { status: 403 }
+    )
+  }
 
-  // Role must exist in DB (seeded via RBAC sync)
-  const role = await db.role.findUnique({ where: { slug: body.roleSlug } })
+  const role = await ensureRole(body.roleSlug)
   if (!role) {
     return NextResponse.json(
       { success: false, error: 'Role not synced; run the seed first', code: 'SYSTEM_ERROR', requestId: uuidv4() },
       { status: 500 }
     )
   }
+  const scopeOverride = scopeFromVisibility(body.scopeType)
 
   if (body.teamId) {
     const team = await db.team.findFirst({ where: { id: body.teamId, organisationId }, select: { id: true } })
@@ -120,7 +126,7 @@ export const POST = routeHandler(async (req: NextRequest) => {
     const existing = await tx.membership.findUnique({ where: key, select: { status: true } })
     if (existing && existing.status !== 'DEACTIVATED') return 'existing'
     const now = new Date()
-    const data = { roleId: role.id, teamId: body.teamId ?? null, status: 'ACTIVE' as const, deactivatedAt: null, acceptedAt: now, invitedBy: user.id, invitedAt: now }
+    const data = { roleId: role.id, teamId: body.teamId ?? null, scopeOverride, status: 'ACTIVE' as const, deactivatedAt: null, acceptedAt: now, invitedBy: user.id, invitedAt: now }
     await tx.membership.upsert({
       where: key,
       update: data,
@@ -142,7 +148,7 @@ export const POST = routeHandler(async (req: NextRequest) => {
     resourceType: 'invitation',
     resourceId: invitationId,
     ipHash,
-    afterJson: { email: body.email, roleId: role.id, teamId: body.teamId },
+    afterJson: { email: body.email, role: role.slug, teamId: body.teamId, scopeOverride },
   })
 
   await logInvite({ email: body.email, organisationId })
