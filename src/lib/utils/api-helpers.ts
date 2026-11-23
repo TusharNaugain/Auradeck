@@ -24,6 +24,15 @@ import {
   ProviderError,
 } from '@/lib/services/errors'
 import { v4 as uuidv4 } from 'uuid'
+import { billingAccessBlocked } from '@/lib/billing/service'
+
+function requestPath(req: NextRequest): string {
+  try {
+    return new URL(req.url).pathname
+  } catch {
+    return ''
+  }
+}
 
 export interface GuardedContext {
   user: NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>
@@ -109,6 +118,19 @@ export async function guardedRoute(
 
   if (options.permission) {
     await assertPermission(ctx, options.permission)
+  }
+
+  // With Razorpay billing on, a practice whose trial/plan has lapsed is read-only
+  // (billing routes stay open so it can pay). No-op while the feature flag is off.
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) && !requestPath(req).startsWith('/api/billing')) {
+    if (await billingAccessBlocked(organisationId)) {
+      return {
+        response: NextResponse.json(
+          { success: false, error: 'Your free trial or plan has ended. Choose a plan to keep making changes.', code: 'SUBSCRIPTION_REQUIRED', requestId },
+          { status: 402 }
+        ),
+      }
+    }
   }
 
   return { context: { user, ctx, organisationId, ipHash, userAgentHash } }

@@ -74,11 +74,13 @@ const nextConfig = {
           key: 'Content-Security-Policy',
           value: [
             "default-src 'self'",
-            "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
+            // Razorpay Checkout (Auradeck plan payments) loads its script and an iframe.
+            "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://checkout.razorpay.com",
             "style-src 'self' 'unsafe-inline'",
             "img-src 'self' data: https:",
             "font-src 'self'",
             "connect-src 'self' https:",
+            "frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com",
             "frame-ancestors 'none'",
           ].join('; '),
         },

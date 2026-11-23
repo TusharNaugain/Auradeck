@@ -5,6 +5,7 @@ import {
   CalendarClock,
   ClipboardList,
   Contact,
+  CreditCard,
   Gauge,
   HeartHandshake,
   Headset,
@@ -75,7 +76,10 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     id: 'workspace',
     label: 'Workspace',
-    items: [{ href: '/settings', label: 'Settings', icon: Settings }],
+    items: [
+      { href: '/billing/plan', label: 'Plans & billing', icon: CreditCard, permission: 'billing.view' },
+      { href: '/settings', label: 'Settings', icon: Settings },
+    ],
   },
 ]
 

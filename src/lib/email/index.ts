@@ -207,6 +207,19 @@ export function invitationEmail(url: string, organisationName: string, invitedBy
   }
 }
 
+export function trialEndingEmail(practiceName: string, trialEndsOn: string, url: string): EmailTemplateArgs {
+  const name = practiceName.replace(/[<>&"]/g, '')
+  return {
+    subject: 'Your Auradeck free trial ends soon',
+    html: template(
+      'Your free trial is ending',
+      `<p>The Auradeck free trial for <strong>${name}</strong> ends on <strong>${trialEndsOn}</strong>.</p>
+      <p>Choose a plan to keep using Auradeck without interruption. Your clients, appointments and notes stay exactly as they are.</p>
+      ${linkButton(url, 'Choose a plan')}`
+    ),
+  }
+}
+
 /** Convenience wrapper used everywhere */
 export async function sendTemplatedEmail(to: string, args: EmailTemplateArgs): Promise<boolean> {
   return sendEmail({

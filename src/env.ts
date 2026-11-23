@@ -40,6 +40,12 @@ const envSchema = z.object({
   SEED_USER_PASSWORD: z.string().default('User@123456'),
   CSRF_SECRET: z.string().min(32, 'CSRF_SECRET must be at least 32 characters').optional(),
   ALLOWED_ORIGINS: z.string().default('http://localhost:3000'),
+  // Razorpay subscription billing (server-only; never exposed to the browser except the Key ID via API)
+  BILLING_RAZORPAY_ENABLED: z.enum(['true', 'false']).default('false'),
+  RAZORPAY_KEY_ID: z.string().optional(),
+  RAZORPAY_KEY_SECRET: z.string().optional(),
+  RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
+  BILLING_CRON_SECRET: z.string().optional(),
 })
 
 type Env = z.infer<typeof envSchema>

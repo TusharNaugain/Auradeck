@@ -223,6 +223,20 @@ enum SubscriptionStatus {
   EXPIRED
 }
 
+/// Auradeck's own subscription for a therapist practice (Razorpay).
+enum PracticeSubscriptionStatus {
+  TRIAL
+  CREATED
+  AUTHENTICATED
+  ACTIVE
+  PAST_DUE
+  HALTED
+  PAUSED
+  CANCELLED
+  COMPLETED
+  EXPIRED
+}
+
 enum InvoiceStatus {
   DRAFT
   ISSUED
@@ -361,6 +375,8 @@ model Organisation {
   clients              Client[]
   appointments         Appointment[]
   subscriptions        Subscription[]
+  practiceSubscription PracticeSubscription?
+  practicePayments     PracticePayment[]
   invoices             Invoice[]
   tasks                Task[]
   campaigns            Campaign[]
@@ -1263,6 +1279,11 @@ model Plan {
   maxUsers         Int?
   maxBranches      Int?
   isActive         Boolean        @default(true)
+  /// Offered to therapist practices on the in-app Plans & Billing page.
+  isSelfServe      Boolean        @default(false)
+  trialDays        Int            @default(14)
+  /// Razorpay plan ids per key mode and interval, e.g. {"test:monthly":"plan_X"}.
+  razorpayPlanIds  Json           @default("{}")
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
 
@@ -1270,6 +1291,7 @@ model Plan {
   accounts         Account[]
   opportunities    Opportunity[]
   subscriptions    Subscription[]
+  practiceSubscriptions PracticeSubscription[]
 
   @@map("plans")
 }
@@ -1302,6 +1324,82 @@ model Subscription {
   @@index([status])
   @@index([renewalDate])
   @@map("subscriptions")
+}
+
+/// What a therapist practice pays Auradeck. One per practice organisation.
+/// Status changes only from server-verified Razorpay data (webhook or API fetch).
+model PracticeSubscription {
+  id                     String                     @id @default(cuid())
+  organisationId         String                     @unique
+  planId                 String?
+  status                 PracticeSubscriptionStatus @default(TRIAL)
+  billingInterval        String?
+  amount                 Decimal?                   @db.Decimal(15, 2)
+  currency               String                     @default("INR")
+  trialEndsAt            DateTime?
+  currentPeriodStart     DateTime?
+  currentPeriodEnd       DateTime?
+  graceUntil             DateTime?
+  cancelAtPeriodEnd      Boolean                    @default(false)
+  cancelledAt            DateTime?
+  razorpaySubscriptionId String?                    @unique
+  razorpayCustomerId     String?
+  razorpayPlanId         String?
+  checkoutShortUrl       String?
+  lastEventAt            DateTime?
+  trialReminderSentAt    DateTime?
+  createdAt              DateTime                   @default(now())
+  updatedAt              DateTime                   @updatedAt
+
+  organisation           Organisation               @relation(fields: [organisationId], references: [id])
+  plan                   Plan?                      @relation(fields: [planId], references: [id])
+  payments               PracticePayment[]
+
+  @@index([status])
+  @@index([trialEndsAt])
+  @@map("practice_subscriptions")
+}
+
+/// Razorpay payments (successful and failed) against a practice subscription.
+model PracticePayment {
+  id                String               @id @default(cuid())
+  organisationId    String
+  subscriptionId    String
+  razorpayPaymentId String               @unique
+  razorpayInvoiceId String?
+  amount            Decimal              @db.Decimal(15, 2)
+  currency          String               @default("INR")
+  status            String
+  method            String?
+  failureReason     String?
+  paidAt            DateTime?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  organisation      Organisation         @relation(fields: [organisationId], references: [id])
+  subscription      PracticeSubscription @relation(fields: [subscriptionId], references: [id])
+
+  @@index([organisationId, createdAt])
+  @@map("practice_payments")
+}
+
+/// Every Razorpay webhook received. The unique event id makes replays no-ops.
+model BillingEvent {
+  id                     String    @id @default(cuid())
+  provider               String    @default("razorpay")
+  eventId                String    @unique
+  eventType              String
+  organisationId         String?
+  razorpaySubscriptionId String?
+  payload                Json
+  status                 String
+  error                  String?
+  receivedAt             DateTime  @default(now())
+  processedAt            DateTime?
+
+  @@index([razorpaySubscriptionId])
+  @@index([eventType, receivedAt])
+  @@map("billing_events")
 }
 
 model Invoice {
