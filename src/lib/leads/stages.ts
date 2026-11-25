@@ -104,6 +104,20 @@ export function stageTitle(stage: string): string {
   return info.step ? `${info.step} · ${info.label}` : info.label
 }
 
+/** Stages a lead moves through in order; Dead sits outside (we don't know how far it got). */
+export const FUNNEL_STAGES: readonly LeadStage[] = LEAD_STAGES.filter((stage) => stage !== 'LOST')
+
+/** Leads that reached at least each funnel stage: everyone at it or further along. */
+export function reachedCounts(counts: Map<string, number>): Map<LeadStage, number> {
+  const reached = new Map<LeadStage, number>()
+  let running = 0
+  for (let i = FUNNEL_STAGES.length - 1; i >= 0; i--) {
+    running += counts.get(FUNNEL_STAGES[i]) ?? 0
+    reached.set(FUNNEL_STAGES[i], running)
+  }
+  return reached
+}
+
 export function isStage(value: string, group: readonly LeadStage[]): boolean {
   return (group as readonly string[]).includes(value)
 }

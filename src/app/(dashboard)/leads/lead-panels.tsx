@@ -70,7 +70,8 @@ export function StageGuide() {
       <summary className="flex cursor-pointer list-none items-center gap-2 font-medium">
         <Info className="size-4 text-muted-foreground" />
         Stage guide — what each stage means
-        <span className="text-xs font-normal text-muted-foreground group-open:hidden">(show)</span>
+        <span className="text-xs font-normal text-primary underline group-open:hidden">(show)</span>
+        <span className="hidden text-xs font-normal text-primary underline group-open:inline">(hide)</span>
       </summary>
       <div className="mt-3 overflow-x-auto">
         <table className="w-full min-w-[560px] text-left text-xs">

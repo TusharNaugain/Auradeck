@@ -400,6 +400,19 @@ function getSheetImportOverview(): typeof demoOverview {
   ).length
   overview.dashboard.sales.leadsByStage = Array.from(stages, ([stage, count]) => ({ stage, count }))
   overview.dashboard.sales.leadsBySource = Array.from(sources, ([source, count]) => ({ source, count }))
+  const owners = new Map<string, { userId: string | null; name: string; stages: Record<string, number> }>()
+  for (const lead of leads) {
+    const owner = lead.assignedTo as { id?: string; fullName?: string } | null | undefined
+    const key = owner?.id ?? 'unassigned'
+    const row = owners.get(key) ?? { userId: owner?.id ?? null, name: owner?.fullName ?? 'Unassigned', stages: {} }
+    const stage = String(lead.lifecycleStage ?? 'NEW')
+    row.stages[stage] = (row.stages[stage] ?? 0) + 1
+    owners.set(key, row)
+  }
+  ;(overview.dashboard as Record<string, unknown>).pipeline = {
+    stageCounts: Array.from(stages, ([stage, count]) => ({ stage, count })),
+    owners: [...owners.values()],
+  }
   return overview
 }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  CLOSED_STAGES, CUSTOMER_STAGES, LEAD_STAGES, LEGACY_STAGE_MAP, PIPELINE_STAGES, STAGE_INFO, normalizeStage, stageTitle,
+  CLOSED_STAGES, CUSTOMER_STAGES, LEAD_STAGES, LEGACY_STAGE_MAP, PIPELINE_STAGES, STAGE_INFO, normalizeStage, reachedCounts, stageTitle,
 } from '@/lib/leads/stages'
 import { addExtraContact, lockedSourceFields, parseExtraContacts, removeExtraContact, MAX_EXTRA_CONTACTS } from '@/lib/leads/extra-contacts'
 
@@ -50,6 +50,16 @@ describe('lead pipeline stages', () => {
     expect(normalizeStage('banana')).toBeNull()
     expect(normalizeStage('')).toBeNull()
     expect(normalizeStage(42)).toBeNull()
+  })
+
+  it('counts leads that reached each funnel stage (for "moved to next stage")', () => {
+    const reached = reachedCounts(new Map([['NEW', 4], ['CONTACTED', 10], ['DEMO_SCHEDULED', 2], ['PAID', 1], ['LOST', 7]]))
+    expect(reached.get('NEW')).toBe(17)
+    expect(reached.get('CONTACTED')).toBe(13)
+    expect(reached.get('INTERESTED')).toBe(3)
+    expect(reached.get('PAID')).toBe(1)
+    expect(reached.get('CHURNED')).toBe(0)
+    expect(reached.has('LOST')).toBe(false)
   })
 
   it('titles pipeline steps with their number', () => {

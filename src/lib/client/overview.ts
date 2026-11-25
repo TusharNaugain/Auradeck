@@ -47,6 +47,11 @@ export interface OverviewDashboard {
     slaBreached: number
   }
   own?: { tasksDueToday: number; overdueTasks: number }
+  /** Every lead stage (Dead included) and each owner's leads per stage, in the viewer's scope. */
+  pipeline?: {
+    stageCounts: { stage: string; count: number }[]
+    owners: { userId: string | null; name: string; stages: Record<string, number> }[]
+  }
 }
 
 export function useOverview(): UseQueryResult<{ dashboard: OverviewDashboard }, unknown> {

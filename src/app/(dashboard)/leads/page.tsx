@@ -266,6 +266,14 @@ function LeadsPageInner() {
     setSelectedId(leadParam)
     router.replace('/leads', { scroll: false })
   }, [leadParam, router])
+  // The dashboard links to /leads?stage=<stage> to open one stage directly.
+  const stageParam = params.get('stage')
+  React.useEffect(() => {
+    if (!stageParam) return
+    const stage = stageParam.toUpperCase() as LeadStage
+    if (LEAD_STAGES.includes(stage)) setStageFilter(stage)
+    router.replace('/leads', { scroll: false })
+  }, [stageParam, router])
   React.useEffect(() => { setPage(1) }, [stageFilter, layout, sortBy, sort])
   React.useEffect(() => {
     const timer = window.setTimeout(() => {

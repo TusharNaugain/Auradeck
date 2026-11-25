@@ -47,7 +47,7 @@ export const GET = routeHandler(async (req: NextRequest) => {
   const canViewBilling = ctx.permissions.has(PERMISSIONS.BILLING_VIEW)
 
   // Execute all independent reporting sections in parallel (eliminates waterfall latency)
-  const [salesSection, onboardingSection, billingSection, managementSection, tasksSection] = await Promise.all([
+  const [salesSection, onboardingSection, billingSection, managementSection, tasksSection, pipelineSection] = await Promise.all([
     // 1. Sales dashboard
     (async () => {
       if (!canViewLeads && !canViewOpportunities) return null
@@ -218,6 +218,32 @@ export const GET = routeHandler(async (req: NextRequest) => {
         overdueTasks: myOverdueTasks,
       }
     })(),
+
+    // 6. Lead pipeline: every stage (Dead included) and each owner's leads per stage
+    (async () => {
+      if (!canViewLeads) return null
+      const where = { organisationId, deletedAt: null, ...leadRecordScope }
+      const [byStage, byOwnerStage] = await Promise.all([
+        db.lead.groupBy({ by: ['lifecycleStage'], where, _count: true }),
+        db.lead.groupBy({ by: ['assignedToUserId', 'lifecycleStage'], where, _count: true }),
+      ])
+      const ownerIds = [...new Set(byOwnerStage.map((row) => row.assignedToUserId).filter((id): id is string => !!id))]
+      const users = ownerIds.length
+        ? await db.user.findMany({ where: { id: { in: ownerIds } }, select: { id: true, fullName: true } })
+        : []
+      const names = new Map(users.map((u) => [u.id, u.fullName]))
+      const owners = new Map<string, { userId: string | null; name: string; stages: Record<string, number> }>()
+      for (const row of byOwnerStage) {
+        const key = row.assignedToUserId ?? 'unassigned'
+        const owner = owners.get(key) ?? { userId: row.assignedToUserId, name: row.assignedToUserId ? names.get(row.assignedToUserId) ?? 'Team member' : 'Unassigned', stages: {} }
+        owner.stages[row.lifecycleStage] = row._count
+        owners.set(key, owner)
+      }
+      return {
+        stageCounts: byStage.map((row) => ({ stage: row.lifecycleStage, count: row._count })),
+        owners: [...owners.values()],
+      }
+    })(),
   ])
 
   if (salesSection) dashboard.sales = salesSection
@@ -225,6 +251,7 @@ export const GET = routeHandler(async (req: NextRequest) => {
   if (billingSection) dashboard.billing = billingSection
   if (managementSection) dashboard.management = managementSection
   if (tasksSection) dashboard.own = tasksSection
+  if (pipelineSection) dashboard.pipeline = pipelineSection
 
   return NextResponse.json(
     { success: true, data: { dashboard }, requestId: uuidv4() },
