@@ -13,6 +13,7 @@
  *     No value is ever discarded without being recorded.
  */
 
+import { normalizeStage } from '@/lib/leads/stages'
 import { createHash } from 'node:crypto'
 import { normalizePhone } from '@/lib/validations/common'
 
@@ -105,8 +106,11 @@ export function canonicalValue(field: SyncField, value: unknown): SyncValue {
     case 'whatsappNumber':
       return normalizePhone(text)
     case 'leadSource':
-    case 'lifecycleStage':
       return text.toLowerCase().replace(/[\s-]+/g, '_')
+    case 'lifecycleStage':
+      // "3. Demo Scheduled", "Signed Up / Trial", legacy "Qualified"… → canonical stage.
+      // Unknown text is kept so validation rejects it visibly.
+      return normalizeStage(text)?.toLowerCase() ?? text.toLowerCase().replace(/[\s-]+/g, '_')
     case 'linkedin':
       return NOT_APPLICABLE.has(text.toLowerCase()) ? null : text
     default:

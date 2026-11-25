@@ -1,7 +1,8 @@
 /**
  * /api/reports/overview — role-aware dashboard aggregate data.
- * Sales: funnel + forecast. CSM: health + renewals. Management: revenue metrics,
- * SLA conversion. Practice: appointments + billing. All server-side aggregation.
+ * Sales: lead pipeline + forecast. Onboarding progress. Billing. Management: revenue
+ * metrics + SLA. All server-side aggregation. (Practice / health / retention sections
+ * were removed from the product.)
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -12,7 +13,7 @@ import { leadScope as getLeadScope, opportunityScope as getOpportunityScope } fr
 import { computeWeightedAmount } from '@/lib/validations/crm'
 import { computeSlaStatus } from '@/lib/validations/support'
 import { v4 as uuidv4 } from 'uuid'
-import { DEAD_LEAD_STAGES } from '@/lib/services/leads'
+import { CLOSED_STAGES, DEAD_LEAD_STAGES } from '@/lib/leads/stages'
 
 export const GET = routeHandler(async (req: NextRequest) => {
   const guard = await guardedRoute(req, { permission: PERMISSIONS.DASHBOARD_VIEW, policy: 'apiRead', keyByUser: true })
@@ -42,14 +43,11 @@ export const GET = routeHandler(async (req: NextRequest) => {
 
   const canViewLeads = ctx.permissions.has(PERMISSIONS.LEADS_VIEW)
   const canViewOpportunities = ctx.permissions.has(PERMISSIONS.OPPORTUNITIES_VIEW)
-  const canViewSuccess = ctx.permissions.has(PERMISSIONS.SUCCESS_VIEW)
-  const canViewAccounts = ctx.permissions.has(PERMISSIONS.ACCOUNTS_VIEW)
+  const canViewOnboarding = ctx.permissions.has(PERMISSIONS.ONBOARDING_VIEW)
   const canViewBilling = ctx.permissions.has(PERMISSIONS.BILLING_VIEW)
-  const canViewClients = ctx.permissions.has(PERMISSIONS.CLIENTS_VIEW)
-  const canViewAppointments = ctx.permissions.has(PERMISSIONS.APPOINTMENTS_VIEW)
 
   // Execute all independent reporting sections in parallel (eliminates waterfall latency)
-  const [salesSection, csmSection, billingSection, managementSection, practiceSection, tasksSection] = await Promise.all([
+  const [salesSection, onboardingSection, billingSection, managementSection, tasksSection] = await Promise.all([
     // 1. Sales dashboard
     (async () => {
       if (!canViewLeads && !canViewOpportunities) return null
@@ -112,7 +110,7 @@ export const GET = routeHandler(async (req: NextRequest) => {
           _sum: { amount: true },
         }) : Promise.resolve([]),
         canViewLeads ? db.lead.count({ where: { organisationId, nextFollowUpAt: { gte: startOfToday, lte: days(1) }, deletedAt: null, lifecycleStage: { notIn: [...DEAD_LEAD_STAGES] }, ...leadRecordScope } }) : Promise.resolve(0),
-        canViewLeads ? db.lead.count({ where: { organisationId, nextFollowUpAt: { lt: startOfToday }, lifecycleStage: { notIn: ['CONVERTED', 'LOST', 'DISQUALIFIED'] }, deletedAt: null, ...leadRecordScope } }) : Promise.resolve(0),
+        canViewLeads ? db.lead.count({ where: { organisationId, nextFollowUpAt: { lt: startOfToday }, lifecycleStage: { notIn: [...CLOSED_STAGES] }, deletedAt: null, ...leadRecordScope } }) : Promise.resolve(0),
       ])
 
       const pipelineValue = openOpps.reduce((sum, o) => sum + Number(o.amount), 0)
@@ -128,7 +126,7 @@ export const GET = routeHandler(async (req: NextRequest) => {
         leadsToday: canViewLeads ? leadsToday : null,
         leadsThisWeek: canViewLeads ? leadsThisWeek : null,
         leadsThisMonth: canViewLeads ? leadsThisMonth : null,
-        qualifiedLeads: canViewLeads ? (byStage.find((stage) => stage.lifecycleStage === 'QUALIFIED')?._count ?? 0) : null,
+        interestedLeads: canViewLeads ? (byStage.find((stage) => stage.lifecycleStage === 'INTERESTED')?._count ?? 0) : null,
         leadsByStage: canViewLeads ? byStage.map((s: { lifecycleStage: string; _count: number }) => ({ stage: s.lifecycleStage, count: s._count })) : null,
         leadsBySource: canViewLeads ? bySource.map((s: { leadSource: string; _count: number }) => ({ source: s.leadSource, count: s._count })) : null,
         pipelineValue: canViewOpportunities ? pipelineValue : null,
@@ -148,36 +146,17 @@ export const GET = routeHandler(async (req: NextRequest) => {
       }
     })(),
 
-    // 2. CSM dashboard
+    // 2. Onboarding progress
     (async () => {
-      if (!canViewSuccess && !canViewAccounts) return null
-      const canViewOnboarding = ctx.permissions.has(PERMISSIONS.ONBOARDING_VIEW)
-      const [byHealth, renewals30, renewals60, renewals90, onboardingByStatus, atRisk] = await Promise.all([
-        db.account.groupBy({ by: ['healthStatus'], where: { organisationId }, _count: true }),
-        db.account.count({ where: { organisationId, renewalDate: { gte: today, lte: days(30) } } }),
-        db.account.count({ where: { organisationId, renewalDate: { gt: days(30), lte: days(60) } } }),
-        db.account.count({ where: { organisationId, renewalDate: { gt: days(60), lte: days(90) } } }),
-        canViewOnboarding
-          ? db.onboardingProject.groupBy({ by: ['status'], where: { organisationId }, _count: true })
-          : Promise.resolve([]),
-        db.account.count({ where: { organisationId, healthStatus: { in: ['AT_RISK', 'CRITICAL'] } } }),
-      ])
+      if (!canViewOnboarding) return null
+      const onboardingByStatus = await db.onboardingProject.groupBy({ by: ['status'], where: { organisationId }, _count: true })
 
       return {
-        accountsByHealth: byHealth.map((h: { healthStatus: string; _count: number }) => ({ status: h.healthStatus, count: h._count })),
-        renewalsIn30: renewals30,
-        renewalsIn60: renewals60,
-        renewalsIn90: renewals90,
-        onboardingActive: canViewOnboarding ? onboardingByStatus
+        onboardingActive: onboardingByStatus
           .filter((status) => ['SCHEDULED', 'IN_PROGRESS', 'BLOCKED', 'READY_FOR_GO_LIVE'].includes(status.status))
-          .reduce((sum, status) => sum + status._count, 0) : null,
-        onboardingCompleted: canViewOnboarding
-          ? onboardingByStatus.find((status) => status.status === 'COMPLETED')?._count ?? 0
-          : null,
-        onboardingByStatus: canViewOnboarding
-          ? onboardingByStatus.map((status) => ({ status: status.status, count: status._count }))
-          : null,
-        atRiskAccounts: atRisk,
+          .reduce((sum, status) => sum + status._count, 0),
+        onboardingCompleted: onboardingByStatus.find((status) => status.status === 'COMPLETED')?._count ?? 0,
+        onboardingByStatus: onboardingByStatus.map((status) => ({ status: status.status, count: status._count })),
       }
     })(),
 
@@ -228,24 +207,7 @@ export const GET = routeHandler(async (req: NextRequest) => {
       }
     })(),
 
-    // 5. Practice dashboard
-    (async () => {
-      if (!canViewClients && !canViewAppointments) return null
-      const [appointmentsToday, enquiriesActive, newEnquiriesThisWeek, outstandingInvoices] = await Promise.all([
-        db.appointment.count({ where: { organisationId, startAt: { gte: startOfToday, lte: days(1) }, status: { in: ['SCHEDULED', 'CONFIRMED'] } } }),
-        db.client.count({ where: { organisationId, status: 'ACTIVE' } }),
-        db.client.count({ where: { organisationId, createdAt: { gte: sinceDays(7) } } }),
-        db.client.aggregate({ where: { organisationId, outstandingBalance: { gt: 0 } }, _sum: { outstandingBalance: true } }),
-      ])
-      return {
-        appointmentsToday,
-        activeClients: enquiriesActive,
-        newEnquiriesThisWeek,
-        outstandingBalance: Number(outstandingInvoices._sum.outstandingBalance ?? 0),
-      }
-    })(),
-
-    // 6. Tasks overview (all roles)
+    // 5. Tasks overview (all roles)
     (async () => {
       const [myTasksDue, myOverdueTasks] = await Promise.all([
         db.task.count({ where: { organisationId, assignedToUserId: user.id, dueAt: { gte: startOfToday, lte: days(1) }, status: { notIn: ['DONE', 'CANCELLED'] } } }),
@@ -259,10 +221,9 @@ export const GET = routeHandler(async (req: NextRequest) => {
   ])
 
   if (salesSection) dashboard.sales = salesSection
-  if (csmSection) dashboard.success = csmSection
+  if (onboardingSection) dashboard.success = onboardingSection
   if (billingSection) dashboard.billing = billingSection
   if (managementSection) dashboard.management = managementSection
-  if (practiceSection) dashboard.practice = practiceSection
   if (tasksSection) dashboard.own = tasksSection
 
   return NextResponse.json(

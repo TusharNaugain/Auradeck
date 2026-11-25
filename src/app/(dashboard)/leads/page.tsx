@@ -9,7 +9,6 @@ import {
   ArrowRight,
   CalendarClock,
   Check,
-  ChevronDown,
   CircleDollarSign,
   Clock3,
   ExternalLink,
@@ -42,7 +41,6 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { api, ApiError } from '@/lib/client/api'
 import { errorMessage, useHasPermission, useInvalidate } from '@/lib/client/hooks'
 import { LeadOwner } from './lead-owner'
@@ -53,6 +51,15 @@ import { leadCreateSchema, leadSource, preferredContactMethod } from '@/lib/vali
 import { toast } from 'sonner'
 import { createGoogleCalendarLink } from '@/lib/client/calendar-link'
 import { LeadsTable, type SortKey } from './leads-table'
+import { ExtraContacts, LeadKeyFields, LeadNameEditor, LeadStagePanel, SourceLockNote, StageGuide, stageColor, type ExtraContactView } from './lead-panels'
+import {
+  DEAD_LEAD_STAGES,
+  LEAD_STAGES,
+  STAGE_INFO,
+  isStage,
+  stageTitle,
+  type LeadStage,
+} from '@/lib/leads/stages'
 
 const createFields: FieldSpec[] = [
   { name: 'firstName', label: 'First name', kind: 'text', half: true },
@@ -62,7 +69,7 @@ const createFields: FieldSpec[] = [
   { name: 'alternatePhone', label: 'Alternate phone', kind: 'tel', half: true },
   { name: 'preferredContactMethod', label: 'Preferred contact', kind: 'select', options: preferredContactMethod.options.filter((m) => m !== 'whatsapp'), half: true },
   { name: 'organisationName', label: 'Practice / organisation', kind: 'text', half: true },
-  { name: 'jobTitle', label: 'Job title', kind: 'text', half: true },
+  { name: 'jobTitle', label: 'Role / practice type', kind: 'text', half: true },
   { name: 'leadSource', label: 'Source', kind: 'select', options: leadSource.options.filter((s) => s !== 'whatsapp'), half: true },
   { name: 'sourceDetail', label: 'Source details', kind: 'text', half: true },
   { name: 'website', label: 'Website', kind: 'url', half: true },
@@ -77,19 +84,6 @@ const createFields: FieldSpec[] = [
   { name: 'useCase', label: 'Use case', kind: 'textarea' },
 ]
 
-const LEAD_STAGES = [
-  'NEW',
-  'CONTACTED',
-  'QUALIFIED',
-  'DEMO_BOOKED',
-  'PROPOSAL_SENT',
-  'NEGOTIATION',
-  'CONVERTED',
-  'LOST',
-  'DISQUALIFIED',
-] as const
-
-type LeadStage = typeof LEAD_STAGES[number]
 type LeadSummary = {
   id: string
   leadNumber: string
@@ -111,6 +105,8 @@ type LeadSummary = {
   phoneNumber: string | null
   whatsappNumber: string | null
   customFields?: Record<string, unknown> | null
+  jobTitle?: string | null
+  nextAction?: string | null
 }
 
 type LeadActivity = {
@@ -126,6 +122,10 @@ type LeadActivity = {
 }
 
 type LeadDetails = LeadSummary & {
+  firstName?: string
+  lastName?: string
+  firstContactedAt?: string | null
+  extraContacts?: ExtraContactView[] | null
   phoneCountryCode?: string | null
   alternatePhone?: string | null
   website?: string | null
@@ -211,12 +211,8 @@ const PRIORITY_VIEWS = [
   { value: 'others', label: 'Others', style: 'data-[active=true]:border-slate-400 data-[active=true]:bg-slate-100 data-[active=true]:text-slate-800 dark:data-[active=true]:bg-slate-500/20 dark:data-[active=true]:text-slate-200' },
 ] as const
 
-const PIPELINE_TABS = [
-  { value: 'all', label: 'All leads' },
-  { value: 'active', label: 'Active pipeline' },
-  { value: 'converted', label: 'Converted' },
-  { value: 'closed', label: 'Dead' },
-] as const
+/** "All leads" = every stage except Dead; Dead is its own button. */
+const ALL_VISIBLE_STAGES: readonly LeadStage[] = LEAD_STAGES.filter((stage) => !isStage(stage, DEAD_LEAD_STAGES))
 
 export default function LeadsPage() {
   return (
@@ -232,7 +228,8 @@ function LeadsPageInner() {
   const [layout, setLayout] = React.useState<'list' | 'board'>('list')
   const [sortBy, setSortBy] = React.useState<SortKey>('createdAt')
   const [sort, setSort] = React.useState<'asc' | 'desc'>('desc')
-  const [tab, setTab] = React.useState<string>('all')
+  /** One stage picked from the stage bar; null = All leads (everything except Dead). */
+  const [stageFilter, setStageFilter] = React.useState<LeadStage | null>(null)
   const [searchInput, setSearchInput] = React.useState('')
   const [search, setSearch] = React.useState('')
   const [source, setSource] = React.useState('all')
@@ -269,7 +266,7 @@ function LeadsPageInner() {
     setSelectedId(leadParam)
     router.replace('/leads', { scroll: false })
   }, [leadParam, router])
-  React.useEffect(() => { setPage(1) }, [tab, layout, sortBy, sort])
+  React.useEffect(() => { setPage(1) }, [stageFilter, layout, sortBy, sort])
   React.useEffect(() => {
     const timer = window.setTimeout(() => {
       setSearch(searchInput.trim())
@@ -278,14 +275,14 @@ function LeadsPageInner() {
     return () => window.clearTimeout(timer)
   }, [searchInput])
   const leadsQuery = useQuery({
-    queryKey: ['leads', 'pipeline', { page, search, source, priority, tab, layout, sortBy, sort }],
+    queryKey: ['leads', 'pipeline', { page, search, source, priority, stageFilter, layout, sortBy, sort }],
     queryFn: () => api.get<LeadListResponse>('/api/leads', {
       page,
       pageSize: layout === 'list' ? 50 : 100,
       search,
       source: source === 'all' ? undefined : source,
       priority: priority === 'all' ? undefined : priority,
-      ...(tab === 'active' ? { view: 'pipeline' } : tab === 'converted' ? { stage: 'converted' } : tab === 'closed' ? { view: 'dead' } : {}),
+      ...(stageFilter ? { stage: stageFilter.toLowerCase() } : {}),
       sortBy,
       sort,
     }),
@@ -300,34 +297,21 @@ function LeadsPageInner() {
 
   const visibleLeads = React.useMemo(() => {
     const items = leadsQuery.data?.items ?? []
-    const kept = items.filter((lead) => {
-      if (tab === 'active') return !['CONVERTED', 'LOST', 'DISQUALIFIED'].includes(lead.lifecycleStage)
-      if (tab === 'converted') return lead.lifecycleStage === 'CONVERTED'
-      if (tab === 'closed') return ['LOST', 'DISQUALIFIED'].includes(lead.lifecycleStage)
-      return true
-    })
+    const kept = items.filter((lead) => (stageFilter ? lead.lifecycleStage === stageFilter : isStage(lead.lifecycleStage, ALL_VISIBLE_STAGES)))
     // Priority leads float to the top of each board column (stable sort); the list keeps the server sort.
     return layout === 'board' ? kept.sort((a, b) => Number(b.isPriority) - Number(a.isPriority)) : kept
-  }, [leadsQuery.data?.items, tab, layout])
+  }, [leadsQuery.data?.items, stageFilter, layout])
   const sources = leadSource.options.filter((s) => s !== 'whatsapp')
   const countByStage = React.useMemo(
     () => new Map((leadsQuery.data?.stageCounts ?? []).map(({ stage, count }) => [stage, count])),
     [leadsQuery.data?.stageCounts]
   )
-  const countForTab = React.useCallback(
-    (value: string) => {
-      if (value === 'all') return LEAD_STAGES.filter((stage) => !['LOST', 'DISQUALIFIED'].includes(stage)).reduce((count, stage) => count + (countByStage.get(stage) ?? 0), 0)
-      if (value === 'active') return LEAD_STAGES.filter((stage) => !['CONVERTED', 'LOST', 'DISQUALIFIED'].includes(stage)).reduce((count, stage) => count + (countByStage.get(stage) ?? 0), 0)
-      if (value === 'converted') return countByStage.get('CONVERTED') ?? 0
-      return (countByStage.get('LOST') ?? 0) + (countByStage.get('DISQUALIFIED') ?? 0)
-    },
-    [countByStage]
-  )
+  const allLeadsCount = ALL_VISIBLE_STAGES.reduce((count, stage) => count + (countByStage.get(stage) ?? 0), 0)
 
   async function updateStage(leadId: string, lifecycleStage: LeadStage) {
     if (lifecycleStage === 'LOST') {
       const lead = leadsQuery.data?.items.find((item) => item.id === leadId)
-      if (!window.confirm(`Mark ${lead?.fullName ?? 'this lead'} as dead? It leaves the board and the dashboard and moves to the Dead tab. The change is recorded in its activity history.`)) return
+      if (!window.confirm(`Mark ${lead?.fullName ?? 'this lead'} as dead? It leaves the board and the dashboard and moves to the "Dead" stage. The change is recorded in its activity history.`)) return
     }
     try {
       await api.patch(`/api/leads/${leadId}`, { lifecycleStage: lifecycleStage.toLowerCase() })
@@ -385,7 +369,7 @@ function LeadsPageInner() {
     <div className="space-y-5">
       <PageHeader
         title="Leads"
-        description="Track every conversation from first enquiry through conversion."
+        description="Every lead from first outreach to paid customer, in 8 clear stages."
         actions={
           <div className="flex items-center gap-2">
             <div role="group" aria-label="Layout" className="flex rounded-md border border-input p-0.5">
@@ -410,17 +394,43 @@ function LeadsPageInner() {
         }
       />
 
+      <div role="group" aria-label="Filter by stage" className="flex gap-2 overflow-x-auto pb-1">
+        <button
+          type="button"
+          aria-pressed={stageFilter === null}
+          title="Every lead except Dead"
+          onClick={() => setStageFilter(null)}
+          className={cn(
+            'flex shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-xs transition',
+            stageFilter === null ? 'border-primary bg-primary/10 text-foreground' : 'border-border/70 bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground'
+          )}
+        >
+          <span className="whitespace-nowrap font-medium">All leads</span>
+          <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] tabular-nums">{allLeadsCount}</span>
+        </button>
+        {LEAD_STAGES.map((stage) => {
+          const active = stageFilter === stage
+          return (
+            <button
+              key={stage}
+              type="button"
+              aria-pressed={active}
+              title={`${STAGE_INFO[stage].meaning} To do: ${STAGE_INFO[stage].todo}`}
+              onClick={() => setStageFilter(active ? null : stage)}
+              className={cn(
+                'flex shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-left text-xs transition',
+                active ? 'border-primary bg-primary/10 text-foreground' : 'border-border/70 bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground'
+              )}
+            >
+              <span className={cn('size-2 shrink-0 rounded-full', stageColor(stage))} />
+              <span className="whitespace-nowrap font-medium">{stageTitle(stage)}</span>
+              <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] tabular-nums">{countByStage.get(stage) ?? 0}</span>
+            </button>
+          )
+        })}
+      </div>
+
       <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-        <Tabs value={tab} onValueChange={setTab}>
-          <TabsList className="h-auto w-full justify-start overflow-x-auto sm:w-auto">
-            {PIPELINE_TABS.map((item) => (
-              <TabsTrigger key={item.value} value={item.value} className="gap-2">
-                {item.label}
-                <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] tabular-nums">{countForTab(item.value)}</span>
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
         <div className="flex flex-col gap-2 sm:flex-row">
           <div role="group" aria-label="Priority view" className="flex gap-1 rounded-lg bg-muted/50 p-1">
             {PRIORITY_VIEWS.map((view) => {
@@ -461,6 +471,8 @@ function LeadsPageInner() {
         </div>
       </div>
 
+      <StageGuide />
+
       {leadsQuery.isError && (
         <Card>
           <CardContent className="py-12">
@@ -496,38 +508,33 @@ function LeadsPageInner() {
         <LeadsTable
           leads={visibleLeads as never}
           canUpdate={canUpdate}
-          stageLabel={stageLabel}
           sortBy={sortBy}
           sort={sort}
           onSort={changeSort}
           onOpen={setSelectedId}
           onTogglePriority={(lead) => void togglePriority(lead.id, !lead.isPriority)}
+          onStageChange={(lead, stage) => void updateStage(lead.id, stage)}
         />
       )}
 
       {layout === 'board' && leadsQuery.data && visibleLeads.length > 0 && (
         <div className="flex items-start gap-3 overflow-x-auto pb-4">
-          {LEAD_STAGES.filter((stage) => {
-            if (tab === 'active') return !['CONVERTED', 'LOST', 'DISQUALIFIED'].includes(stage)
-            if (tab === 'converted') return stage === 'CONVERTED'
-            if (tab === 'closed') return stage === 'LOST' || stage === 'DISQUALIFIED'
-            return !['LOST', 'DISQUALIFIED'].includes(stage)
-          }).map((stage) => {
+          {(stageFilter ? [stageFilter] : ALL_VISIBLE_STAGES).map((stage) => {
             const stageLeads = visibleLeads.filter((lead) => lead.lifecycleStage === stage)
             const stageCount = countByStage.get(stage) ?? 0
             return (
-              <section key={stage} aria-label={`${stageLabel(stage)} leads`} className="w-[min(84vw,300px)] shrink-0">
-                <header className="mb-3 flex items-center justify-between gap-2 px-1">
+              <section key={stage} aria-label={`${stageTitle(stage)} leads`} className="w-[min(84vw,300px)] shrink-0">
+                <header className="mb-3 px-1" title={`${STAGE_INFO[stage].meaning} To do: ${STAGE_INFO[stage].todo}`}>
                   <div className="flex min-w-0 items-center gap-2">
                     <span className={cn('size-2 shrink-0 rounded-full', stageColor(stage))} />
-                    <h2 className="truncate text-sm font-semibold">{stageLabel(stage)}</h2>
+                    <h2 className="truncate text-sm font-semibold">{stageTitle(stage)}</h2>
                     <span className="rounded-full bg-muted px-2 py-0.5 text-xs tabular-nums text-muted-foreground">{stageCount}</span>
                   </div>
-                  <ChevronDown aria-hidden="true" className="size-4 text-muted-foreground" />
+                  <p className="mt-1 line-clamp-2 text-[11px] text-muted-foreground">{STAGE_INFO[stage].meaning}</p>
                 </header>
                 <div className="min-h-40 space-y-2 rounded-xl bg-muted/30 p-2">
                     {stageLeads.length === 0 ? (
-                    <p className="px-2 py-4 text-xs text-muted-foreground">No leads in this stage.</p>
+                    <p className="px-2 py-4 text-xs text-muted-foreground">No leads in this stage. {STAGE_INFO[stage].todo}</p>
                   ) : (
                     stageLeads.map((lead) => (
                       <LeadCard
@@ -673,7 +680,9 @@ function LeadCard({
               {lead.lastContactedAt ? `Last contact · ${formatRelative(lead.lastContactedAt)}` : 'No interaction yet'}
             </p>
             <p className={cn('mt-1 truncate', lead.nextFollowUpAt && isOverdue(lead.nextFollowUpAt) ? 'text-destructive' : 'text-muted-foreground')}>
-              {lead.nextFollowUpAt ? `Next task · ${formatRelative(lead.nextFollowUpAt)}` : 'No follow-up set'}
+              {lead.nextAction
+                ? `Next · ${lead.nextAction}${lead.nextFollowUpAt ? ` (${formatRelative(lead.nextFollowUpAt)})` : ''}`
+                : lead.nextFollowUpAt ? `Follow-up · ${formatRelative(lead.nextFollowUpAt)}` : 'No next action set'}
             </p>
           </div>
           {canUpdate && (
@@ -688,7 +697,7 @@ function LeadCard({
               }}
               className="max-w-28 rounded-md border border-input bg-background px-2 py-1 text-[11px]"
             >
-              {LEAD_STAGES.filter((stage) => stage !== 'CONVERTED' || stage === lead.lifecycleStage).map((stage) => <option key={stage} value={stage}>{stageLabel(stage)}</option>)}
+              {LEAD_STAGES.map((stage) => <option key={stage} value={stage}>{stageTitle(stage)}</option>)}
             </select>
           )}
         </div>
@@ -735,6 +744,8 @@ function LeadDetailsSheet({
   const [interactionNotes, setInteractionNotes] = React.useState('')
   const [interactionOutcome, setInteractionOutcome] = React.useState('')
   const [interactionDate, setInteractionDate] = React.useState('')
+  /** Optional stage move saved together with the interaction ('' = keep current stage). */
+  const [interactionStage, setInteractionStage] = React.useState<LeadStage | ''>('')
   const [interactionPending, setInteractionPending] = React.useState(false)
   const [activationPending, setActivationPending] = React.useState(false)
   const invalidate = useInvalidate()
@@ -811,6 +822,9 @@ function LeadDetailsSheet({
         visibility: 'team',
       })
       toast.success(DEMO_MODE ? 'Interaction saved in this browser' : 'Interaction saved')
+      // Stage move goes through the normal stage update (confirm for Dead, history note, counts refresh).
+      if (interactionStage && interactionStage !== lead.lifecycleStage) onStageChange(interactionStage)
+      setInteractionStage('')
       setInteractionOpen(false)
       setInteractionSubject('')
       setInteractionNotes('')
@@ -857,15 +871,16 @@ function LeadDetailsSheet({
           <>
             <SheetHeader className="border-b border-border/70 bg-muted/20 pr-12">
               <div className="flex flex-wrap items-center gap-2">
-                <SheetTitle className="text-xl">{lead.fullName}</SheetTitle>
-                <Badge variant="outline">{stageLabel(lead.lifecycleStage)}</Badge>
+                <LeadNameEditor lead={lead} canUpdate={canUpdate}>
+                  <SheetTitle className="text-xl">{lead.fullName}</SheetTitle>
+                </LeadNameEditor>
+                <Badge variant="outline">{stageTitle(lead.lifecycleStage)}</Badge>
                 {lead.isPriority && <Badge className="border-amber-300 bg-amber-100 text-amber-900 hover:bg-amber-100 dark:bg-amber-500/20 dark:text-amber-200"><Star className="mr-1 size-3 fill-amber-500 text-amber-500" />Priority reachout</Badge>}
               </div>
               <SheetDescription>{lead.organisationName || lead.leadNumber} · Added {formatDate(lead.createdAt)}</SheetDescription>
               <div className="flex flex-wrap gap-2 pt-2">
                 <Badge variant={lead.leadScore >= 70 ? 'success' : lead.leadScore >= 40 ? 'warning' : 'secondary'}>Score {lead.leadScore}</Badge>
                 <Badge variant="outline">{enumLabel(lead.leadSource)}</Badge>
-                <LeadOwner leadId={lead.id} owner={lead.assignedTo ?? null} />
                 {canUpdate && (
                   <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => onTogglePriority(!lead.isPriority)}>
                     <Star className={cn('mr-1 size-3', lead.isPriority && 'fill-amber-500 text-amber-500')} />
@@ -876,8 +891,12 @@ function LeadDetailsSheet({
             </SheetHeader>
 
             <div className="space-y-5 p-5">
+              <LeadStagePanel stage={lead.lifecycleStage} canUpdate={canUpdate} onStageChange={onStageChange} />
+
+              <LeadKeyFields lead={lead} canUpdate={canUpdate} owner={<LeadOwner leadId={lead.id} owner={lead.assignedTo ?? null} />} />
+
               <section className="rounded-xl border border-border/70 p-4">
-                <SectionTitle icon={CalendarClock} title="Next follow-up" />
+                <SectionTitle icon={CalendarClock} title="Next follow-up date" />
                 <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                   <Input
                     type="datetime-local"
@@ -898,12 +917,14 @@ function LeadDetailsSheet({
               <section className="rounded-xl border border-border/70 p-4">
                 <SectionTitle icon={Phone} title="Contact information" />
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  <ContactLink icon={Phone} label="Phone" value={lead.phoneNumber} href={lead.phoneNumber ? `tel:${lead.phoneNumber}` : undefined} />
-                  <ContactLink icon={Phone} label="Alternate phone" value={lead.alternatePhone} href={lead.alternatePhone ? `tel:${lead.alternatePhone}` : undefined} />
-                  <ContactLink icon={Mail} label="Email" value={lead.email} href={lead.email ? `mailto:${lead.email}` : undefined} />
+                  <ContactLink icon={Mail} label="Work email (source)" value={lead.email} href={lead.email ? `mailto:${lead.email}` : undefined} />
+                  <ContactLink icon={Phone} label="Phone (source)" value={lead.phoneNumber} href={lead.phoneNumber ? `tel:${lead.phoneNumber}` : undefined} />
+                  {lead.alternatePhone && <ContactLink icon={Phone} label="Alternate phone" value={lead.alternatePhone} href={`tel:${lead.alternatePhone}`} />}
                   <ContactLink icon={ArrowUpRight} label="Website" value={lead.website} href={lead.website ? safeExternalUrl(lead.website) : undefined} />
                   {(lead.city || lead.state || lead.country) && <ContactLink icon={MapPin} label="Location" value={[lead.city, lead.state, lead.country].filter(Boolean).join(', ')} />}
                 </div>
+                <SourceLockNote />
+                <ExtraContacts leadId={lead.id} contacts={Array.isArray(lead.extraContacts) ? lead.extraContacts : []} canUpdate={canUpdate} />
                 {lead.tags.length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-1.5" aria-label="Lead tags">
                     {lead.tags.map((tag) => <Badge key={tag} variant="secondary">{tag}</Badge>)}
@@ -911,10 +932,10 @@ function LeadDetailsSheet({
                 )}
               </section>
 
+              {hasMoreDetails(lead) && (
               <section className="rounded-xl border border-border/70 p-4">
-                <SectionTitle icon={UserRound} title="Lead details" />
+                <SectionTitle icon={UserRound} title="More details" />
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  {lead.jobTitle && <KeyValue label="Job title" value={lead.jobTitle} />}
                   {lead.preferredContactMethod && <KeyValue label="Preferred contact" value={enumLabel(lead.preferredContactMethod)} />}
                   {lead.sourceDetail && <KeyValue label="Source details" value={lead.sourceDetail} />}
                   {lead.qualificationStatus && <KeyValue label="Qualification" value={enumLabel(lead.qualificationStatus)} />}
@@ -936,6 +957,7 @@ function LeadDetailsSheet({
                   </div>
                 )}
               </section>
+              )}
 
               <section className="rounded-xl border border-border/70 p-4">
                 <div className="flex items-center justify-between gap-3">
@@ -1043,7 +1065,7 @@ function LeadDetailsSheet({
                 <section className="rounded-xl border border-destructive/30 p-4">
                   <SectionTitle icon={Trash2} title="Dead or remove" />
                   <p className="mt-2 text-xs text-muted-foreground">
-                    Dead leads leave the board and the dashboard and stay under the Dead tab. Archive hides a lead completely (sheet sync will not bring it back); its history is kept.
+                    Dead = never became a customer (not interested / not a fit). Dead leads leave the board and the dashboard and stay under the “Dead” button. Archive hides a lead completely (sheet sync will not bring it back); its history is kept.
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {canUpdate && lead.lifecycleStage !== 'LOST' && (
@@ -1054,19 +1076,6 @@ function LeadDetailsSheet({
                 </section>
               )}
 
-              {canUpdate && (
-                <section className="rounded-xl border border-border/70 p-4">
-                  <SectionTitle icon={ChevronDown} title="Move through pipeline" />
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {LEAD_STAGES.filter((stage) => stage !== lead.lifecycleStage && stage !== 'CONVERTED').map((stage) => (
-                      <Button key={stage} variant="outline" size="sm" onClick={() => onStageChange(stage)}>
-                        Move to {stageLabel(stage)}
-                      </Button>
-                    ))}
-                  </div>
-                  <p className="mt-2 text-xs text-muted-foreground">Lead conversion is handled through the Convert action so its account, contact and opportunity records are created together.</p>
-                </section>
-              )}
             </div>
           </>
         ) : null}
@@ -1123,6 +1132,23 @@ function LeadDetailsSheet({
               <label className="block space-y-1 text-sm">
                 <span>{plannedMeeting ? 'Meeting date and time' : 'Schedule date and time (optional)'}</span>
                 <Input type="datetime-local" value={interactionDate} onChange={(event) => setInteractionDate(event.target.value)} required={plannedMeeting} disabled={interactionPending} />
+              </label>
+            )}
+            {canUpdate && lead && (
+              <label className="block space-y-1 text-sm">
+                <span>Move lead to stage (optional)</span>
+                <select
+                  value={interactionStage}
+                  onChange={(event) => setInteractionStage(event.target.value as LeadStage | '')}
+                  className="h-10 w-full rounded-md border border-input bg-background px-3"
+                  disabled={interactionPending}
+                >
+                  <option value="">Keep current — {stageTitle(lead.lifecycleStage)}</option>
+                  {LEAD_STAGES.filter((stage) => stage !== lead.lifecycleStage).map((stage) => (
+                    <option key={stage} value={stage}>{stageTitle(stage)}</option>
+                  ))}
+                </select>
+                {interactionStage && <span className="block text-xs text-muted-foreground">{STAGE_INFO[interactionStage].meaning}</span>}
               </label>
             )}
             <label className="block space-y-1 text-sm">
@@ -1202,18 +1228,14 @@ function DetailText({ label, value }: { label: string; value: string }) {
   )
 }
 
-/** "Lost" leads are shown as "Dead" in this page. */
-function stageLabel(stage: string) {
-  return stage === 'LOST' ? 'Dead' : enumLabel(stage)
-}
-
-function stageColor(stage: LeadStage) {
-  if (stage === 'CONVERTED') return 'bg-emerald-500'
-  if (stage === 'LOST') return 'bg-rose-500'
-  if (stage === 'NEGOTIATION' || stage === 'PROPOSAL_SENT') return 'bg-amber-500'
-  if (stage === 'DEMO_BOOKED' || stage === 'QUALIFIED') return 'bg-violet-500'
-  if (stage === 'CONTACTED') return 'bg-sky-500'
-  return 'bg-muted-foreground'
+/** Hide the "More details" box when the lead has nothing extra to show. */
+function hasMoreDetails(lead: LeadDetails) {
+  return Boolean(
+    lead.preferredContactMethod || lead.sourceDetail || lead.qualificationStatus || lead.estimatedPracticeSize ||
+    (lead.estimatedUsers !== undefined && lead.estimatedUsers !== null) || lead.currentSoftware || lead.budgetRange ||
+    lead.expectedTimeline || lead.consentStatus || lead.consentSource || lead.painPoints || lead.useCase ||
+    (lead.customFields && Object.keys(lead.customFields).length > 0)
+  )
 }
 
 function toLocalDateTime(value: string) {

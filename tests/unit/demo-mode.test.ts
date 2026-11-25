@@ -125,9 +125,9 @@ describe('browser-only demo mode', () => {
   it('returns stage counts for the full filtered lead set', () => {
     expect(getDemoResponse<{ stageCounts: { stage: string; count: number }[] }>('/api/leads').stageCounts)
       .toEqual(expect.arrayContaining([
-        { stage: 'QUALIFIED', count: 2 },
+        { stage: 'INTERESTED', count: 2 },
         { stage: 'CONTACTED', count: 3 },
-        { stage: 'CONVERTED', count: 1 },
+        { stage: 'SIGNED_UP', count: 1 },
       ]))
   })
 
@@ -138,7 +138,7 @@ describe('browser-only demo mode', () => {
     monthStart.setHours(0, 0, 0, 0)
     expect(leads.total).toBe(10)
     expect(leads.items.filter((lead) => new Date(lead.createdAt) >= monthStart)).toHaveLength(6)
-    expect(getDemoResponse<{ items: { id: string }[] }>('/api/leads', { stage: 'qualified' }).items).toHaveLength(2)
+    expect(getDemoResponse<{ items: { id: string }[] }>('/api/leads', { stage: 'interested' }).items).toHaveLength(2)
     const wonDeals = getDemoResponse<{ items: { id: string; amount: number; wonAt: string; primaryContact: { phoneNumber: string } }[] }>('/api/opportunities', { stage: 'won' }).items
     expect(wonDeals).toHaveLength(3)
     expect(wonDeals.filter((deal) => new Date(deal.wonAt) >= monthStart)).toHaveLength(3)

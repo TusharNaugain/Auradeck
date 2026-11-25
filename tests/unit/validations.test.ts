@@ -14,9 +14,21 @@ import { computeSlaDueDates, computeSlaStatus, SLA_HOURS } from '@/lib/validatio
 import { articleSlugSchema, knowledgeCreateSchema } from '@/lib/validations/knowledge'
 
 describe('common validators', () => {
-  it('accepts supported lead-stage updates while conversion remains a separate operation', () => {
-    expect(leadUpdateSchema.safeParse({ lifecycleStage: 'demo_booked' }).success).toBe(true)
+  it('accepts the 8-stage pipeline, maps labels and legacy names, and rejects unknown stages', () => {
+    expect(leadUpdateSchema.parse({ lifecycleStage: 'demo_scheduled' }).lifecycleStage).toBe('demo_scheduled')
+    expect(leadUpdateSchema.parse({ lifecycleStage: 'Signed Up / Trial' }).lifecycleStage).toBe('signed_up')
+    expect(leadUpdateSchema.parse({ lifecycleStage: 'demo_booked' }).lifecycleStage).toBe('demo_scheduled')
+    expect(leadUpdateSchema.parse({ lifecycleStage: 'qualified' }).lifecycleStage).toBe('interested')
     expect(leadUpdateSchema.safeParse({ lifecycleStage: 'not_a_stage' }).success).toBe(false)
+  })
+
+  it('validates extra contacts by type', () => {
+    expect(leadUpdateSchema.safeParse({ addExtraContact: { type: 'phone', value: '+91 98765 43210' } }).success).toBe(true)
+    expect(leadUpdateSchema.safeParse({ addExtraContact: { type: 'phone', value: 'call me' } }).success).toBe(false)
+    expect(leadUpdateSchema.safeParse({ addExtraContact: { type: 'email', value: 'nope' } }).success).toBe(false)
+    expect(leadUpdateSchema.safeParse({ addExtraContact: { type: 'linkedin', value: 'linkedin.com/in/asha' } }).success).toBe(true)
+    expect(leadUpdateSchema.safeParse({ addExtraContact: { type: 'website', value: 'javascript:alert(1)' } }).success).toBe(false)
+    expect(leadUpdateSchema.safeParse({ addExtraContact: { type: 'fax', value: '123' } }).success).toBe(false)
   })
 
   it('lower-cases and trims emails', () => {

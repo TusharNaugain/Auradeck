@@ -16,8 +16,7 @@ const CSRF_TOKEN_CONTEXT = 'auradeck-csrf-v1'
 
 const PROTECTED_PAGES = [
   '/dashboard', '/leads', '/accounts', '/contacts', '/opportunities',
-  '/activities', '/onboarding', '/success', '/tickets', '/clients',
-  '/appointments', '/billing', '/reports', '/tasks', '/automations',
+  '/activities', '/onboarding', '/tickets', '/billing', '/reports', '/tasks', '/automations',
   '/knowledge-base', '/settings', '/notifications', '/campaigns',
 ]
 
@@ -161,10 +160,7 @@ export const config = {
     '/opportunities/:path*',
     '/activities/:path*',
     '/onboarding/:path*',
-    '/success/:path*',
     '/tickets/:path*',
-    '/clients/:path*',
-    '/appointments/:path*',
     '/billing/:path*',
     '/reports/:path*',
     '/tasks/:path*',

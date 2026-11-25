@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { enumLabel, formatDate, formatRelative } from '@/lib/client/format'
 import { cn } from '@/lib/utils/cn'
+import { DEAD_LEAD_STAGES, LEAD_STAGES, STAGE_INFO, isStage, stageTitle, type LeadStage } from '@/lib/leads/stages'
 
 export type SortKey = 'firstName' | 'leadScore' | 'createdAt' | 'nextFollowUpAt'
 
@@ -24,9 +25,9 @@ export interface TableLead {
   lastContactedAt: string | null
   assignedTo: { fullName: string } | null
   customFields?: Record<string, unknown> | null
+  jobTitle?: string | null
+  nextAction?: string | null
 }
-
-const DEAD = ['LOST', 'DISQUALIFIED']
 
 /** The sheet's own source text ("Hot lead - Survey", "hero"...) when there is one, else the CRM source. */
 function sourceText(lead: TableLead): string {
@@ -58,11 +59,11 @@ function SortHead({
 
 /** Compact, sortable list of leads. Paging and sorting happen on the server, so it stays fast with thousands of leads. */
 export function LeadsTable({
-  leads, canUpdate, stageLabel, sortBy, sort, onSort, onOpen, onTogglePriority,
+  leads, canUpdate, sortBy, sort, onSort, onOpen, onTogglePriority, onStageChange,
 }: {
+  onStageChange: (lead: TableLead, stage: LeadStage) => void
   leads: TableLead[]
   canUpdate: boolean
-  stageLabel: (stage: string) => string
   sortBy: SortKey
   sort: 'asc' | 'desc'
   onSort: (column: SortKey) => void
@@ -75,13 +76,14 @@ export function LeadsTable({
         <TableHeader>
           <TableRow>
             <TableHead className="w-10" />
-            <SortHead label="Lead" column="firstName" sortBy={sortBy} sort={sort} onSort={onSort} />
-            <TableHead className="hidden md:table-cell">Contact</TableHead>
+            <SortHead label="Name · role" column="firstName" sortBy={sortBy} sort={sort} onSort={onSort} />
+            <TableHead className="hidden md:table-cell">Work email</TableHead>
             <TableHead>Stage</TableHead>
             <TableHead className="hidden lg:table-cell">Source</TableHead>
-            <TableHead className="hidden xl:table-cell">City</TableHead>
-            <SortHead label="Follow-up" column="nextFollowUpAt" sortBy={sortBy} sort={sort} onSort={onSort} className="hidden lg:table-cell" />
-            <SortHead label="Added" column="createdAt" sortBy={sortBy} sort={sort} onSort={onSort} className="hidden sm:table-cell" />
+            <TableHead className="hidden xl:table-cell">Last contact</TableHead>
+            <SortHead label="Next action" column="nextFollowUpAt" sortBy={sortBy} sort={sort} onSort={onSort} className="hidden lg:table-cell" />
+            <TableHead className="hidden xl:table-cell">Owner</TableHead>
+            <SortHead label="Added" column="createdAt" sortBy={sortBy} sort={sort} onSort={onSort} className="hidden 2xl:table-cell" />
             <SortHead label="Score" column="leadScore" sortBy={sortBy} sort={sort} onSort={onSort} className="text-right" />
           </TableRow>
         </TableHeader>
@@ -116,27 +118,49 @@ export function LeadsTable({
               </TableCell>
               <TableCell className="max-w-[16rem]">
                 <p className="truncate font-medium">{lead.fullName}</p>
-                <p className="truncate text-xs text-muted-foreground">{lead.leadNumber}{lead.assignedTo ? ` · ${lead.assignedTo.fullName}` : ''}</p>
+                <p className="truncate text-xs text-muted-foreground">{lead.jobTitle || lead.leadNumber}</p>
               </TableCell>
               <TableCell className="hidden max-w-[16rem] md:table-cell">
                 <p className="truncate text-sm">{lead.email ?? '—'}</p>
                 {lead.phoneNumber && <p className="truncate text-xs text-muted-foreground">{lead.phoneNumber}</p>}
               </TableCell>
               <TableCell>
-                <Badge variant={DEAD.includes(lead.lifecycleStage) ? 'secondary' : 'outline'} className="whitespace-nowrap font-normal">
-                  {stageLabel(lead.lifecycleStage)}
+                {canUpdate ? (
+                  <select
+                    aria-label={`Change stage for ${lead.fullName}`}
+                    title={STAGE_INFO[lead.lifecycleStage as LeadStage]?.meaning}
+                    value={lead.lifecycleStage}
+                    onClick={(event) => event.stopPropagation()}
+                    onKeyDown={(event) => event.stopPropagation()}
+                    onChange={(event) => onStageChange(lead, event.target.value as LeadStage)}
+                    className="max-w-40 rounded-md border border-input bg-background px-2 py-1 text-xs"
+                  >
+                    {LEAD_STAGES.map((stage) => <option key={stage} value={stage}>{stageTitle(stage)}</option>)}
+                  </select>
+                ) : (
+                <Badge
+                  variant={isStage(lead.lifecycleStage, DEAD_LEAD_STAGES) ? 'secondary' : 'outline'}
+                  className="whitespace-nowrap font-normal"
+                  title={STAGE_INFO[lead.lifecycleStage as LeadStage]?.meaning}
+                >
+                  {stageTitle(lead.lifecycleStage)}
                 </Badge>
+                )}
               </TableCell>
               <TableCell className="hidden max-w-[12rem] lg:table-cell">
                 <span className="block truncate text-sm text-muted-foreground">{sourceText(lead)}</span>
               </TableCell>
+              <TableCell className="hidden whitespace-nowrap text-sm text-muted-foreground xl:table-cell">
+                {lead.lastContactedAt ? formatRelative(lead.lastContactedAt) : '—'}
+              </TableCell>
+              <TableCell className="hidden max-w-[14rem] lg:table-cell">
+                <p className="truncate text-sm">{lead.nextAction || '—'}</p>
+                {lead.nextFollowUpAt && <p className="truncate text-xs text-muted-foreground">{formatRelative(lead.nextFollowUpAt)}</p>}
+              </TableCell>
               <TableCell className="hidden max-w-[10rem] xl:table-cell">
-                <span className="block truncate text-sm text-muted-foreground">{lead.city ?? '—'}</span>
+                <span className="block truncate text-sm text-muted-foreground">{lead.assignedTo?.fullName ?? 'Unassigned'}</span>
               </TableCell>
-              <TableCell className="hidden whitespace-nowrap text-sm text-muted-foreground lg:table-cell">
-                {lead.nextFollowUpAt ? formatRelative(lead.nextFollowUpAt) : '—'}
-              </TableCell>
-              <TableCell className="hidden whitespace-nowrap text-sm text-muted-foreground sm:table-cell">{formatDate(lead.createdAt)}</TableCell>
+              <TableCell className="hidden whitespace-nowrap text-sm text-muted-foreground 2xl:table-cell">{formatDate(lead.createdAt)}</TableCell>
               <TableCell className="text-right">
                 <Badge variant={lead.leadScore >= 70 ? 'success' : lead.leadScore >= 40 ? 'warning' : 'secondary'}>{lead.leadScore}</Badge>
               </TableCell>

@@ -17,13 +17,20 @@ const baseRecord = (over: Partial<SyncRecord> = {}): SyncRecord =>
   })
 
 describe('canonicalisation', () => {
+  it('maps sheet stage labels (8-stage pipeline) and legacy names to canonical stages', () => {
+    expect(canonicalizePartial({ lifecycleStage: '5. Signed Up / Trial' }).lifecycleStage).toBe('signed_up')
+    expect(canonicalizePartial({ lifecycleStage: 'Churned / Paused' }).lifecycleStage).toBe('churned')
+    expect(canonicalizePartial({ lifecycleStage: 'Qualified' }).lifecycleStage).toBe('interested')
+    expect(canonicalizePartial({ lifecycleStage: 'Not A Stage' }).lifecycleStage).toBe('not_a_stage')
+  })
+
   it('normalises values so equal data always compares equal', () => {
     const rec = canonicalizePartial({
       email: '  Jordan@Example.TEST ', phone: '+91 98765-43210', lifecycleStage: 'Demo Booked',
       leadSource: 'Inbound-Call', city: '   ',
     })
     expect(rec).toEqual({
-      email: 'jordan@example.test', phone: '+919876543210', lifecycleStage: 'demo_booked',
+      email: 'jordan@example.test', phone: '+919876543210', lifecycleStage: 'demo_scheduled',
       leadSource: 'inbound_call', city: null,
     })
   })

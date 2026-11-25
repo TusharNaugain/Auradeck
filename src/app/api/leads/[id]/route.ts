@@ -15,6 +15,8 @@ import { normalizePhone } from '@/lib/validations/common'
 import { resolveLeadScope } from '@/lib/reports/scope'
 import { assertActiveMember, assertCanAssign } from '@/lib/services/assignment'
 import { v4 as uuidv4 } from 'uuid'
+import { DEAD_LEAD_STAGES, stageLabel } from '@/lib/leads/stages'
+import { addExtraContact, lockedSourceFields, parseExtraContacts, removeExtraContact } from '@/lib/leads/extra-contacts'
 
 type RouteContext = { params: Promise<{ id: string }> }
 
@@ -116,11 +118,29 @@ export const PATCH = routeHandler(async (req: NextRequest, context: RouteContext
 
   const lead = await db.lead.findFirst({
     where: { AND: [{ id, organisationId, deletedAt: null }, recordScope] },
-    select: { id: true, leadNumber: true, lifecycleStage: true, isPriority: true, assignedToUserId: true, assignedTeamId: true },
+    select: {
+      id: true, leadNumber: true, lifecycleStage: true, isPriority: true, assignedToUserId: true, assignedTeamId: true,
+      firstName: true, lastName: true, email: true, phoneNumber: true, alternatePhone: true, whatsappNumber: true, extraContacts: true, firstContactedAt: true,
+    },
   })
   if (!lead) throw new NotFoundError('Lead not found')
 
   const body = await parseJsonBody(req, leadUpdateSchema)
+  // Email / phone that came from the source (sheet, form, import) are read-only once set;
+  // extra numbers and profiles are added as extra contacts instead.
+  const locked = lockedSourceFields(lead, body)
+  if (locked.length) {
+    throw new ValidationFailedError(`${locked.join(', ')} came from the lead source and cannot be changed. Add it under "Add contact" instead.`)
+  }
+  let extraContacts: ReturnType<typeof parseExtraContacts> | undefined
+  if (body.addExtraContact || body.removeExtraContactId) {
+    extraContacts = parseExtraContacts(lead.extraContacts)
+    if (body.removeExtraContactId) extraContacts = removeExtraContact(extraContacts, body.removeExtraContactId)
+    if (body.addExtraContact) extraContacts = addExtraContact(extraContacts, body.addExtraContact, user.id)
+  }
+  const firstName = body.firstName ?? lead.firstName
+  const lastName = body.lastName ?? lead.lastName
+  const nameChanged = firstName !== lead.firstName || lastName !== lead.lastName
   // Re-assigning a lead (person or team) is its own permission, not part of editing.
   if (body.assignedToUserId !== undefined) {
     assertCanAssign(ctx, { currentOwnerId: lead.assignedToUserId, nextOwnerId: body.assignedToUserId ?? null })
@@ -131,17 +151,17 @@ export const PATCH = routeHandler(async (req: NextRequest, context: RouteContext
   if (body.assignedTeamId !== undefined && (body.assignedTeamId ?? null) !== lead.assignedTeamId) {
     assertCanAssign(ctx, { currentOwnerId: 'team', nextOwnerId: 'changed' })
   }
-  if (body.lifecycleStage === 'converted') {
-    throw new ValidationFailedError('Use the lead conversion action to convert a lead')
-  }
 
-  const before = { lifecycleStage: lead.lifecycleStage, isPriority: lead.isPriority }
+  const before = {
+    lifecycleStage: lead.lifecycleStage,
+    isPriority: lead.isPriority,
+    ...(nameChanged ? { fullName: `${lead.firstName} ${lead.lastName}`.trim() } : {}),
+  }
   const updated = await db.$transaction(async (tx) => {
     const updatedLead = await tx.lead.update({
       where: { id: lead.id },
       data: {
-        ...(body.firstName ? { firstName: body.firstName, fullName: `${body.firstName} ${(body as { lastName?: string }).lastName ?? ''}` } : {}),
-        ...(body.lastName ? { lastName: body.lastName } : {}),
+        ...(nameChanged ? { firstName, lastName, fullName: `${firstName} ${lastName}`.trim() } : {}),
         ...(body.email !== undefined ? { email: body.email } : {}),
         ...(body.phone !== undefined ? { phoneNumber: body.phone ? normalizePhone(body.phone) : undefined, phoneCountryCode: body.phone?.startsWith('+') ? body.phone.slice(1, 3) : undefined } : {}),
         ...(body.alternatePhone !== undefined ? { alternatePhone: body.alternatePhone } : {}),
@@ -166,26 +186,29 @@ export const PATCH = routeHandler(async (req: NextRequest, context: RouteContext
         ...(body.preferredContactMethod !== undefined ? { preferredContactMethod: body.preferredContactMethod?.toUpperCase() ?? null } : {}),
         ...(body.assignedToUserId !== undefined ? { assignedToUserId: body.assignedToUserId } : {}),
         ...(body.assignedTeamId !== undefined ? { assignedTeamId: body.assignedTeamId } : {}),
+        ...(body.nextAction !== undefined ? { nextAction: body.nextAction || null } : {}),
+        ...(extraContacts ? { extraContacts: extraContacts as never } : {}),
         ...(body.nextFollowUpAt !== undefined ? { nextFollowUpAt: body.nextFollowUpAt ? new Date(body.nextFollowUpAt) : null } : {}),
         ...(body.consentStatus !== undefined ? { consentStatus: body.consentStatus } : {}),
         ...(body.consentSource !== undefined ? { consentSource: body.consentSource } : {}),
         ...(body.tags ? { tags: body.tags } : {}),
         ...(body.customFields ? { customFields: body.customFields } : {}),
         ...(body.lifecycleStage ? { lifecycleStage: body.lifecycleStage.toUpperCase() as never } : {}),
+        // Leaving the New inbox = first outreach; record its date once.
+        ...(body.lifecycleStage && body.lifecycleStage !== 'new' && !lead.firstContactedAt ? { firstContactedAt: new Date() } : {}),
         ...(body.isPriority !== undefined ? { isPriority: body.isPriority } : {}),
       },
     })
-    if (
-      lead.lifecycleStage !== updatedLead.lifecycleStage &&
-      ['LOST', 'DISQUALIFIED'].includes(updatedLead.lifecycleStage)
-    ) {
+    if (lead.lifecycleStage !== updatedLead.lifecycleStage) {
+      const dead = (DEAD_LEAD_STAGES as readonly string[]).includes(updatedLead.lifecycleStage)
+      // Every stage move is written to the lead's history so the pipeline is auditable.
       await tx.activity.create({
         data: {
           organisationId,
           activityType: 'NOTE',
-          subject: updatedLead.lifecycleStage === 'LOST' ? 'Lead marked as dead' : 'Lead disqualified',
-          description: `Lead moved from ${lead.lifecycleStage} to ${updatedLead.lifecycleStage}.`,
-          outcome: updatedLead.lifecycleStage === 'LOST' ? 'Lead closed as lost' : 'Lead disqualified',
+          subject: dead ? 'Lead marked as dead' : `Stage: ${stageLabel(updatedLead.lifecycleStage)}`,
+          description: `Lead moved from ${stageLabel(lead.lifecycleStage)} to ${stageLabel(updatedLead.lifecycleStage)}.`,
+          outcome: dead ? 'Lead closed as dead' : null,
           status: 'COMPLETED',
           ownerUserId: user.id,
           assignedToUserId: user.id,
@@ -205,7 +228,12 @@ export const PATCH = routeHandler(async (req: NextRequest, context: RouteContext
     resourceType: 'lead',
     resourceId: lead.id,
     beforeJson: before,
-    afterJson: { lifecycleStage: updated.lifecycleStage, isPriority: updated.isPriority },
+    afterJson: {
+      lifecycleStage: updated.lifecycleStage,
+      isPriority: updated.isPriority,
+      ...(nameChanged ? { fullName: updated.fullName } : {}),
+      ...(extraContacts ? { extraContacts: extraContacts.length } : {}),
+    },
     ipHash,
     userAgentHash,
   })

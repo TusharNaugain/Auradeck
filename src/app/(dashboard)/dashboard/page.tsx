@@ -28,6 +28,11 @@ import { cn } from '@/lib/utils/cn'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { toast } from 'sonner'
+import { CLOSED_STAGES, LEAD_STAGES, isStage, stageLabel, stageTitle } from '@/lib/leads/stages'
+
+function sortByStage<T extends { stage: string }>(items: T[]): T[] {
+  return items.slice().sort((a, b) => LEAD_STAGES.indexOf(a.stage as never) - LEAD_STAGES.indexOf(b.stage as never))
+}
 
 type Bucket = { label: string; count: number }
 type OperationalStatKey =
@@ -35,23 +40,17 @@ type OperationalStatKey =
   | 'followups-overdue'
   | 'win-rate'
   | 'weighted-forecast'
-  | 'renewals-30'
-  | 'at-risk-accounts'
   | 'current-mrr'
   | 'active-organisations'
   | 'open-tickets'
   | 'sla-breached'
-  | 'appointments-today'
-  | 'active-clients'
-  | 'new-enquiries'
-  | 'outstanding-balance'
   | 'my-tasks-due'
   | 'my-tasks-overdue'
 type OperationalStat = { key: OperationalStatKey; label: string; value: string; tone?: 'danger' }
 type MetricKey =
   | 'leads-all'
   | 'leads-month'
-  | 'leads-qualified'
+  | 'leads-interested'
   | 'opportunities-won'
   | 'opportunities-open'
   | 'subscriptions-trial'
@@ -70,7 +69,7 @@ function buildMetrics(dashboard: OverviewDashboard): Metric[] {
   if (sales?.canViewLeads) {
     add('leads-all', 'Total leads', formatNumber(sales.totalLeads ?? 0), 'In your current scope', UsersRound, 'text-sky-400')
     add('leads-month', 'New leads', formatNumber(sales.leadsThisMonth ?? 0), 'Created this month', UserPlus, 'text-cyan-400')
-    add('leads-qualified', 'Qualified leads', formatNumber(sales.qualifiedLeads ?? 0), 'Ready for the next step', Target, 'text-violet-400')
+    add('leads-interested', 'Interested leads', formatNumber(sales.interestedLeads ?? 0), 'Replied with real interest', Target, 'text-violet-400')
   }
 
   if (sales?.canViewOpportunities) {
@@ -106,26 +105,12 @@ function buildSupportingStats(dashboard: OverviewDashboard) {
     if (sales.winRate !== null) stats.push({ key: 'win-rate', label: 'Win rate', value: formatPercent(sales.winRate) })
     if (sales.weightedForecast !== null) stats.push({ key: 'weighted-forecast', label: 'Weighted forecast', value: formatCurrency(sales.weightedForecast, { compact: true }) })
   }
-  if (dashboard.success) {
-    stats.push(
-      { key: 'renewals-30', label: 'Renewals in 30 days', value: formatNumber(dashboard.success.renewalsIn30) },
-      { key: 'at-risk-accounts', label: 'At-risk accounts', value: formatNumber(dashboard.success.atRiskAccounts), tone: dashboard.success.atRiskAccounts > 0 ? 'danger' : undefined }
-    )
-  }
   if (dashboard.management) {
     stats.push(
       { key: 'current-mrr', label: 'Current MRR', value: formatCurrency(dashboard.management.currentMrr, { compact: true }) },
       { key: 'active-organisations', label: 'Active organisations', value: formatNumber(dashboard.management.activeOrganisations) },
       { key: 'open-tickets', label: 'Open tickets', value: formatNumber(dashboard.management.openTickets) },
       { key: 'sla-breached', label: 'SLA breached', value: formatNumber(dashboard.management.slaBreached), tone: dashboard.management.slaBreached > 0 ? 'danger' : undefined }
-    )
-  }
-  if (dashboard.practice) {
-    stats.push(
-      { key: 'appointments-today', label: 'Appointments today', value: formatNumber(dashboard.practice.appointmentsToday) },
-      { key: 'active-clients', label: 'Active clients', value: formatNumber(dashboard.practice.activeClients) },
-      { key: 'new-enquiries', label: 'New enquiries this week', value: formatNumber(dashboard.practice.newEnquiriesThisWeek) },
-      { key: 'outstanding-balance', label: 'Outstanding balance', value: formatCurrency(dashboard.practice.outstandingBalance, { compact: true }) }
     )
   }
   if (dashboard.own) {
@@ -306,7 +291,7 @@ export default function DashboardPage() {
             <DistributionCard
               title="Lead pipeline"
               description="Leads grouped by their current stage."
-              buckets={dashboard.sales.leadsByStage.map((item) => ({ label: enumLabel(item.stage), count: item.count }))}
+              buckets={sortByStage(dashboard.sales.leadsByStage).map((item) => ({ label: stageTitle(item.stage), count: item.count }))}
             />
           )}
 
@@ -314,7 +299,7 @@ export default function DashboardPage() {
             <section className="space-y-3">
               <div>
                 <h2 className="text-base font-semibold tracking-tight">Operational snapshot</h2>
-                <p className="mt-0.5 text-sm text-muted-foreground">Additional workload and customer-health signals.</p>
+                <p className="mt-0.5 text-sm text-muted-foreground">Follow-ups, tasks and other workload signals.</p>
               </div>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 {supportingStats.map((stat) => (
@@ -499,7 +484,7 @@ async function loadOperationalRecords(key: OperationalStatKey): Promise<Operatio
     const leads = await loadAllPages<LeadRecord>('/api/leads')
     return leads
       .filter((lead) => {
-        if (!lead.nextFollowUpAt || ['CONVERTED', 'LOST', 'DISQUALIFIED'].includes(lead.lifecycleStage)) return false
+        if (!lead.nextFollowUpAt || isStage(lead.lifecycleStage, CLOSED_STAGES)) return false
         const dueAt = new Date(lead.nextFollowUpAt)
         return key === 'followups-due'
           ? dueAt >= todayStart && dueAt < tomorrowStart
@@ -509,7 +494,7 @@ async function loadOperationalRecords(key: OperationalStatKey): Promise<Operatio
         id: lead.id,
         title: lead.fullName,
         subtitle: lead.organisationName || lead.leadNumber,
-        status: lead.lifecycleStage,
+        status: stageLabel(lead.lifecycleStage),
         date: lead.nextFollowUpAt,
         phone: lead.phoneNumber,
         whatsapp: lead.whatsappNumber,
@@ -549,36 +534,6 @@ async function loadOperationalRecords(key: OperationalStatKey): Promise<Operatio
         whatsapp: opportunity.primaryContact?.whatsappNumber ?? null,
         email: opportunity.primaryContact?.email ?? null,
       }))
-  }
-
-  if (key === 'renewals-30' || key === 'at-risk-accounts') {
-    const accounts = await loadAllPages<{
-      id: string
-      accountName: string
-      healthStatus: string
-      healthScore: number
-      renewalDate: string | null
-      mrr: number | string | null
-      contacts?: ContactRecord[]
-    }>('/api/accounts', key === 'renewals-30' ? { renewalWithinDays: 30 } : {})
-    return accounts
-      .filter((account) => key === 'renewals-30'
-        ? Boolean(account.renewalDate && new Date(account.renewalDate) >= now && new Date(account.renewalDate) <= new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000))
-        : ['AT_RISK', 'CRITICAL'].includes(account.healthStatus))
-      .map((account) => {
-        const contact = account.contacts?.[0]
-        return operationalRecord({
-          id: account.id,
-          title: account.accountName,
-          subtitle: contact ? `${contact.fullName}${contact.jobTitle ? ` · ${contact.jobTitle}` : ''}` : `Health score ${account.healthScore}`,
-          status: account.healthStatus,
-          date: account.renewalDate,
-          amount: Number(account.mrr ?? 0),
-          phone: contact?.phoneNumber ?? null,
-          whatsapp: contact?.whatsappNumber ?? null,
-          email: contact?.email ?? null,
-        })
-      })
   }
 
   if (key === 'current-mrr') {
@@ -649,55 +604,6 @@ async function loadOperationalRecords(key: OperationalStatKey): Promise<Operatio
       }))
   }
 
-  if (key === 'appointments-today') {
-    const appointments = await loadAllPages<{
-      id: string
-      startAt: string
-      status: string
-      appointmentType: string
-      client: { firstName: string; lastName: string; preferredName: string | null }
-    }>('/api/appointments', {
-      from: todayStart.toISOString(),
-      to: tomorrowStart.toISOString(),
-    })
-    return appointments.map((appointment) => operationalRecord({
-      id: appointment.id,
-      title: appointment.client.preferredName || `${appointment.client.firstName} ${appointment.client.lastName}`,
-      subtitle: enumLabel(appointment.appointmentType),
-      status: appointment.status,
-      date: appointment.startAt,
-    }))
-  }
-
-  if (key === 'active-clients' || key === 'new-enquiries' || key === 'outstanding-balance') {
-    const clients = await loadAllPages<{
-      id: string
-      clientNumber: string
-      firstName: string
-      lastName: string
-      preferredName: string | null
-      status: string
-      lastAppointmentAt: string | null
-      nextAppointmentAt: string | null
-      outstandingBalance: number | string
-      createdAt: string
-    }>('/api/clients', key === 'active-clients'
-      ? { status: 'active' }
-      : key === 'outstanding-balance' ? { hasOutstandingBalance: 'true' } : {})
-    const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-    return clients
-      .filter((client) => key !== 'new-enquiries' || new Date(client.createdAt) >= weekStart)
-      .filter((client) => key !== 'outstanding-balance' || Number(client.outstandingBalance) > 0)
-      .map((client) => operationalRecord({
-        id: client.id,
-        title: client.preferredName || `${client.firstName} ${client.lastName}`,
-        subtitle: client.clientNumber,
-        status: client.status,
-        date: key === 'new-enquiries' ? client.createdAt : client.nextAppointmentAt ?? client.lastAppointmentAt,
-        amount: key === 'outstanding-balance' ? Number(client.outstandingBalance) : null,
-      }))
-  }
-
   const tasks = await loadAllPages<{
     id: string
     title: string
@@ -725,7 +631,7 @@ async function loadOperationalRecords(key: OperationalStatKey): Promise<Operatio
 async function loadMetricRecords(metric: Metric): Promise<DashboardRecord[]> {
   if (metric.key.startsWith('leads-')) {
     const query: Record<string, string | number> = {}
-    if (metric.key === 'leads-qualified') query.stage = 'qualified'
+    if (metric.key === 'leads-interested') query.stage = 'interested'
     const items = await loadAllPages<LeadRecord>('/api/leads', query)
     const monthStart = new Date()
     monthStart.setDate(1)
@@ -737,7 +643,7 @@ async function loadMetricRecords(metric: Metric): Promise<DashboardRecord[]> {
         kind: 'lead' as const,
         title: lead.fullName,
         subtitle: lead.organisationName || lead.leadNumber,
-        status: lead.lifecycleStage,
+        status: stageLabel(lead.lifecycleStage),
         phone: lead.phoneNumber,
         contactName: lead.fullName,
         contactRole: null,
@@ -974,7 +880,7 @@ function InlineLeadMetricCard({
                         {(lead.city || lead.state) && ` · ${[lead.city, lead.state].filter(Boolean).join(', ')}`}
                       </p>
                     </div>
-                    <Badge variant="outline" className="shrink-0">{enumLabel(lead.lifecycleStage)}</Badge>
+                    <Badge variant="outline" className="shrink-0">{stageLabel(lead.lifecycleStage)}</Badge>
                   </div>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {lead.phoneNumber && <RecordContactAction icon={Phone} label={lead.phoneNumber} href={`tel:${lead.phoneNumber}`} />}

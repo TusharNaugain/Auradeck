@@ -11,7 +11,8 @@ import { routeHandler } from '@/lib/utils/api-helpers'
 import { leadListSchema, leadCreateSchema } from '@/lib/validations/crm'
 import { searchWords } from '@/lib/utils/list'
 import { nextNumber } from '@/lib/services/numbering'
-import { findLeadDuplicate, computeLeadScore, DEAD_LEAD_STAGES } from '@/lib/services/leads'
+import { findLeadDuplicate, computeLeadScore } from '@/lib/services/leads'
+import { CLOSED_STAGES, CUSTOMER_STAGES, DEAD_LEAD_STAGES, PIPELINE_STAGES } from '@/lib/leads/stages'
 import { createAuditLog } from '@/lib/audit'
 import { ConflictError } from '@/lib/services/errors'
 import { PERMISSIONS } from '@/lib/permissions'
@@ -39,7 +40,6 @@ export const GET = routeHandler(async (req: NextRequest) => {
       { organisationId, deletedAt: null },
       recordScope,
       ...(query.source ? [{ leadSource: query.source.toUpperCase() as never }] : []),
-      ...(query.stage ? [{ lifecycleStage: query.stage.toUpperCase() as never }] : []),
       ...(query.assignedToUserId ? [{ assignedToUserId: query.assignedToUserId }] : []),
       ...(query.assignedTeamId ? [{ assignedTeamId: query.assignedTeamId }] : []),
       ...(query.tags ? [{ tags: { hasSome: query.tags.split(',') } }] : []),
@@ -54,10 +54,14 @@ export const GET = routeHandler(async (req: NextRequest) => {
       ...(searchAnd as Prisma.LeadWhereInput[]),
     ],
   }
-  // Dead leads (lost / disqualified) are hidden unless the Dead view or an explicit stage is requested.
-  const dead = [...DEAD_LEAD_STAGES]
-  const scope: Prisma.LeadWhereInput = query.stage ? {} : {
-    lifecycleStage: query.view === 'dead' ? { in: dead } : { notIn: query.view === 'pipeline' ? [...dead, 'CONVERTED' as const] : dead },
+  // An explicit stage wins; otherwise dead leads are hidden unless the Dead view is requested.
+  // (The stage filter lives here, not in filtersWhere, so stage counts still cover every stage.)
+  const scope: Prisma.LeadWhereInput = query.stage ? { lifecycleStage: query.stage.toUpperCase() as never } : {
+    lifecycleStage:
+      query.view === 'pipeline' ? { in: [...PIPELINE_STAGES] }
+        : query.view === 'customers' ? { in: [...CUSTOMER_STAGES] }
+          : query.view === 'dead' ? { in: [...CLOSED_STAGES] }
+            : { notIn: [...DEAD_LEAD_STAGES] },
   }
   const filtered: Prisma.LeadWhereInput = query.priority
     ? { AND: [filtersWhere, { isPriority: query.priority === 'priority' }] }
@@ -77,6 +81,7 @@ export const GET = routeHandler(async (req: NextRequest) => {
         leadScore: true, isPriority: true, assignedToUserId: true, nextFollowUpAt: true,
         createdAt: true, city: true, state: true, tags: true, phoneNumber: true,
         whatsappNumber: true, lastContactedAt: true, firstContactedAt: true, customFields: true,
+        jobTitle: true, nextAction: true,
         assignedTo: { select: { id: true, fullName: true } },
       },
     }),

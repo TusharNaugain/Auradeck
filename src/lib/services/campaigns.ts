@@ -7,9 +7,11 @@ import { DEAD_LEAD_STAGES } from '@/lib/services/leads'
 import { renderCampaignHtml, renderCampaignText } from '@/lib/email/campaign-template'
 import { addContactsToSegment, createSegment, sendBroadcast, type CampaignContact } from '@/lib/email/resend-broadcast'
 
-export type Audience = 'priority' | 'others' | 'all'
+export type Audience = 'priority' | 'others' | 'all' | 'selected'
 
 export const MAX_RECIPIENTS = 5000
+/** Hand-picked recipients ("selected" audience) per send. */
+export const MAX_SELECTED_LEADS = 500
 /** Sends still queued/syncing/sending after this long are treated as interrupted (e.g. server restart). */
 export const STALE_AFTER_MS = 60 * 60 * 1000
 export const ACTIVE_STATUSES = ['queued', 'syncing', 'sending']
@@ -17,19 +19,29 @@ export const ACTIVE_STATUSES = ['queued', 'syncing', 'sending']
 const OPTED_OUT = new Set(['withdrawn', 'opted_out', 'opt_out', 'no', 'none', 'revoked', 'unsubscribed'])
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
-export type EligibleLead = CampaignContact & { isPriority: boolean }
+export type EligibleLead = CampaignContact & { id: string; isPriority: boolean; lifecycleStage: string }
 
-/** Live, non-dead leads with a valid email and no opt-out, one per (lower-cased) email, priority first. */
-export async function eligibleLeads(organisationId: string, scope: Prisma.LeadWhereInput): Promise<EligibleLead[]> {
+/**
+ * Live, non-dead leads with a valid email and no opt-out, one per (lower-cased) email, priority first.
+ * `scope` is the caller's lead visibility (resolveLeadScope); `filter` narrows further (picked ids, search).
+ */
+export async function eligibleLeads(
+  organisationId: string,
+  scope: Prisma.LeadWhereInput,
+  filter?: Prisma.LeadWhereInput,
+  take?: number
+): Promise<EligibleLead[]> {
   const leads = await db.lead.findMany({
     where: {
       AND: [
         { organisationId, deletedAt: null, email: { not: null }, lifecycleStage: { notIn: [...DEAD_LEAD_STAGES] } },
         scope,
+        ...(filter ? [filter] : []),
       ],
     },
     orderBy: [{ isPriority: 'desc' }, { createdAt: 'asc' }],
-    select: { email: true, firstName: true, lastName: true, isPriority: true, consentStatus: true },
+    ...(take ? { take } : {}),
+    select: { id: true, email: true, firstName: true, lastName: true, isPriority: true, consentStatus: true, lifecycleStage: true },
   })
   const seen = new Set<string>()
   const out: EligibleLead[] = []
@@ -43,8 +55,12 @@ export async function eligibleLeads(organisationId: string, scope: Prisma.LeadWh
   return out
 }
 
-export const pickAudience = (leads: EligibleLead[], audience: Audience): EligibleLead[] =>
+export const pickAudience = (leads: EligibleLead[], audience: Exclude<Audience, 'selected'>): EligibleLead[] =>
   audience === 'all' ? leads : leads.filter((l) => l.isPriority === (audience === 'priority'))
+
+/** Only the hand-picked leads that are visible to the sender and still eligible (email, not dead, not opted out). */
+export const selectedLeads = (organisationId: string, scope: Prisma.LeadWhereInput, leadIds: string[]) =>
+  eligibleLeads(organisationId, scope, { id: { in: [...new Set(leadIds)] } })
 
 export const sendSelect = {
   id: true, subject: true, audience: true, recipientCount: true, status: true, error: true,

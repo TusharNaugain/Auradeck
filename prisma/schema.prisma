@@ -66,16 +66,18 @@ enum LeadSource {
   OTHER
 }
 
+/// 8-stage pipeline (see src/lib/leads/stages.ts). NEW = inbox before step 1; LOST = "Dead".
 enum LeadLifecycleStage {
   NEW
   CONTACTED
-  QUALIFIED
-  DEMO_BOOKED
-  PROPOSAL_SENT
-  NEGOTIATION
-  CONVERTED
+  INTERESTED
+  DEMO_SCHEDULED
+  DEMO_ATTENDED
+  SIGNED_UP
+  ACTIVATED
+  PAID
+  CHURNED
   LOST
-  DISQUALIFIED
 }
 
 enum ContactType {
@@ -718,6 +720,9 @@ model Lead {
   firstContactedAt        DateTime?
   lastContactedAt         DateTime?
   nextFollowUpAt          DateTime?
+  nextAction              String?
+  /// Contacts the team added on top of the source email/phone: [{ id, type, value, label?, addedAt, addedBy }]
+  extraContacts           Json               @default("[]")
   convertedAccountId      String?
   convertedContactId      String?
   lostReason              String?

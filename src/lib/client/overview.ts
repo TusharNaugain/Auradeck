@@ -16,7 +16,7 @@ export interface OverviewDashboard {
     leadsToday: number | null
     leadsThisWeek: number | null
     leadsThisMonth: number | null
-    qualifiedLeads: number | null
+    interestedLeads: number | null
     leadsByStage: { stage: string; count: number }[] | null
     leadsBySource: { source: string; count: number }[] | null
     pipelineValue: number | null
@@ -30,14 +30,9 @@ export interface OverviewDashboard {
     overdueFollowups: number | null
   }
   success?: {
-    accountsByHealth: { status: string; count: number }[]
-    renewalsIn30: number
-    renewalsIn60: number
-    renewalsIn90: number
     onboardingActive: number | null
     onboardingCompleted: number | null
     onboardingByStatus: { status: string; count: number }[] | null
-    atRiskAccounts: number
   }
   billing?: {
     trialSubscriptions: number
@@ -50,12 +45,6 @@ export interface OverviewDashboard {
     customersByStatus: { status: string; count: number }[]
     openTickets: number
     slaBreached: number
-  }
-  practice?: {
-    appointmentsToday: number
-    activeClients: number
-    newEnquiriesThisWeek: number
-    outstandingBalance: number
   }
   own?: { tasksDueToday: number; overdueTasks: number }
 }

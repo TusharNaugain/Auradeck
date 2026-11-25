@@ -2,18 +2,15 @@ import {
   Activity,
   Bell,
   Briefcase,
-  CalendarClock,
   ClipboardList,
   Contact,
   CreditCard,
   Gauge,
-  HeartHandshake,
   Headset,
   LayoutGrid,
   Megaphone,
   Settings,
   UserPlus,
-  Users,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -31,7 +28,7 @@ export interface NavGroup {
 }
 
 /**
- * Sidebar map for all 18 product areas. `permission` is matched against the
+ * Sidebar map for the product areas (appointments, clients and health & retention were removed). `permission` is matched against the
  * viewer's effective permission list, so each role only ever sees its own work.
  */
 export const NAV_GROUPS: NavGroup[] = [
@@ -53,14 +50,6 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: '/contacts', label: 'Contacts', icon: Contact, permission: 'contacts.view' },
       { href: '/opportunities', label: 'Opportunities', icon: LayoutGrid, permission: 'opportunities.view' },
       { href: '/campaigns', label: 'Campaigns', icon: Megaphone, permission: 'campaigns.send' },
-    ],
-  },
-  {
-    id: 'practice',
-    label: 'Practice',
-    items: [
-      { href: '/clients', label: 'Clients', icon: Users, permission: 'clients.view' },
-      { href: '/appointments', label: 'Appointments', icon: CalendarClock, permission: 'appointments.view' },
       { href: '/activities', label: 'Activities', icon: Activity, permission: 'activities.view' },
     ],
   },
@@ -69,7 +58,6 @@ export const NAV_GROUPS: NavGroup[] = [
     label: 'Customer success',
     items: [
       { href: '/onboarding', label: 'Onboarding', icon: UserPlus, permission: 'onboarding.view' },
-      { href: '/success', label: 'Health & retention', icon: HeartHandshake, permission: 'success.view' },
       { href: '/tickets', label: 'Support tickets', icon: Headset, permission: 'tickets.view' },
     ],
   },

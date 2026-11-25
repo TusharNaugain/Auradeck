@@ -3,6 +3,7 @@
  * Conversion is transactional: lead -> account + primary contact (+ optional opportunity).
  */
 
+import { PIPELINE_STAGES } from '@/lib/leads/stages'
 import { db } from '@/lib/db'
 import { computeWeightedAmount, DEFAULT_STAGE_PROBABILITY } from '@/lib/validations'
 import { Prisma, type OpportunityStage } from '@prisma/client'
@@ -130,7 +131,7 @@ export async function convertLead(input: ConversionInput): Promise<ConversionRes
         where: { id: input.leadId, organisationId: input.organisationId, deletedAt: null },
       })
       if (!lead) throw new Error('LEAD_NOT_FOUND')
-      if (lead.lifecycleStage === 'CONVERTED') {
+      if (lead.convertedAccountId) {
         throw new Error('LEAD_ALREADY_CONVERTED')
       }
 
@@ -216,7 +217,8 @@ export async function convertLead(input: ConversionInput): Promise<ConversionRes
       await tx.lead.update({
         where: { id: lead.id },
         data: {
-          lifecycleStage: 'CONVERTED',
+          // Conversion = account created → "Signed up / trial", unless the lead is already further along.
+          ...((PIPELINE_STAGES as readonly string[]).includes(lead.lifecycleStage) ? { lifecycleStage: 'SIGNED_UP' as const } : {}),
           convertedAccountId: account.id,
           convertedContactId: contact.id,
         },
@@ -229,4 +231,4 @@ export async function convertLead(input: ConversionInput): Promise<ConversionRes
 }
 
 /** Leads in these stages are "dead": hidden from the board and the dashboard, shown only in the Dead view. */
-export const DEAD_LEAD_STAGES = ['LOST', 'DISQUALIFIED'] as const
+export { DEAD_LEAD_STAGES } from '@/lib/leads/stages'

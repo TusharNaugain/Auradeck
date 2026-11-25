@@ -15,12 +15,38 @@ import {
   customFieldsSchema,
   dateRangeSchema,
 } from './common'
-import { paginationSchema } from './common'
+import { normalizePhone, paginationSchema } from './common'
+import { LEAD_STAGES, normalizeStage } from '@/lib/leads/stages'
 
 /* ---------- Leads ---------- */
 
 export const leadSource = z.enum(['website', 'referral', 'partner', 'campaign', 'inbound_call', 'whatsapp', 'social', 'event', 'import', 'other'])
-export const leadLifecycleStage = z.enum(['new', 'contacted', 'qualified', 'demo_booked', 'proposal_sent', 'negotiation', 'converted', 'lost', 'disqualified'])
+const LEAD_STAGE_VALUES = LEAD_STAGES.map((stage) => stage.toLowerCase()) as [Lowercase<(typeof LEAD_STAGES)[number]>, ...Lowercase<(typeof LEAD_STAGES)[number]>[]]
+export const leadLifecycleStage = z.enum(LEAD_STAGE_VALUES)
+/** Accepts labels ("Demo Scheduled") and pre-pipeline names ("qualified") and stores the canonical value. */
+export const leadStageInput = z.preprocess((value) => normalizeStage(value)?.toLowerCase() ?? value, leadLifecycleStage)
+
+export const EXTRA_CONTACT_TYPES = ['phone', 'email', 'whatsapp', 'linkedin', 'instagram', 'facebook', 'twitter', 'website', 'other'] as const
+export const extraContactType = z.enum(EXTRA_CONTACT_TYPES)
+/** One contact a team member adds on top of the lead's source email/phone. */
+export const extraContactInput = z
+  .object({
+    type: extraContactType,
+    value: z.string().trim().min(1, 'Enter a value').max(300),
+    label: z.string().trim().max(50).optional(),
+  })
+  .superRefine((contact, ctx) => {
+    if ((contact.type === 'phone' || contact.type === 'whatsapp') && !phoneSchema.safeParse(normalizePhone(contact.value)).success) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['value'], message: 'Enter a valid phone number with country code' })
+    }
+    if (contact.type === 'email' && !emailSchema.safeParse(contact.value).success) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['value'], message: 'Enter a valid email address' })
+    }
+    if (/[<>]/.test(contact.value) || /^\s*(javascript|data|vbscript):/i.test(contact.value)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['value'], message: 'This value is not allowed' })
+    }
+  })
+export type ExtraContactInput = z.infer<typeof extraContactInput>
 export const preferredContactMethod = z.enum(['email', 'phone', 'whatsapp', 'sms'])
 
 export const leadCreateObject = z.object({
@@ -65,16 +91,20 @@ export const leadCreateSchema = leadCreateObject.superRefine((data, ctx) => {
 })
 
 export const leadUpdateSchema = leadCreateObject.partial().extend({
-  lifecycleStage: leadLifecycleStage.optional(),
+  lifecycleStage: leadStageInput.optional(),
   isPriority: z.boolean().optional(),
+  nextAction: safeTextOptional(200),
+  /** Add one extra contact (phone, social profile…). Source email/phone are never overwritten. */
+  addExtraContact: extraContactInput.optional(),
+  removeExtraContactId: z.string().trim().min(1).max(64).optional(),
 })
 export const leadListSchema = paginationSchema.extend({
   search: z.string().trim().max(200).optional(),
   source: leadSource.optional(),
-  stage: leadLifecycleStage.optional(),
+  stage: leadStageInput.optional(),
   priority: z.enum(['priority', 'others']).optional(),
-  /** Default (omitted) hides dead leads; 'pipeline' also hides converted ones; 'dead' shows only dead. An explicit `stage` wins. */
-  view: z.enum(['active', 'pipeline', 'dead']).optional(),
+  /** Default (omitted) hides dead leads; 'pipeline' = New..Demo attended; 'customers' = Signed up..Paid; 'dead' = Churned + Dead. An explicit `stage` wins. */
+  view: z.enum(['active', 'pipeline', 'customers', 'dead']).optional(),
   assignedToUserId: z.string().optional(),
   assignedTeamId: z.string().optional(),
   tags: z.string().optional(), // comma-separated

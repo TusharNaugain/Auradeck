@@ -15,17 +15,25 @@ import { resolveLeadScope } from '@/lib/reports/scope'
 import { renderCampaignHtml, renderCampaignText, withSampleValues } from '@/lib/email/campaign-template'
 import { sendTestEmail } from '@/lib/email/resend-broadcast'
 import {
-  ACTIVE_STATUSES, MAX_RECIPIENTS, STALE_AFTER_MS, eligibleLeads, pickAudience, runCampaignSend, sendSelect, toSendDto,
+  ACTIVE_STATUSES, MAX_RECIPIENTS, MAX_SELECTED_LEADS, STALE_AFTER_MS, eligibleLeads, pickAudience, runCampaignSend,
+  selectedLeads, sendSelect, toSendDto,
 } from '@/lib/services/campaigns'
 import { v4 as uuidv4 } from 'uuid'
 
-const bodySchema = z.object({
-  audience: z.enum(['priority', 'others', 'all']),
-  subject: z.string().trim().min(1).max(150),
-  message: z.string().trim().min(1).max(10000),
-  mode: z.enum(['test', 'send']),
-  confirmCount: z.number().int().min(0).optional(),
-})
+const bodySchema = z
+  .object({
+    audience: z.enum(['priority', 'others', 'all', 'selected']),
+    /** Hand-picked leads when audience is "selected". */
+    leadIds: z.array(z.string().trim().min(1).max(64)).max(MAX_SELECTED_LEADS).optional(),
+    subject: z.string().trim().min(1).max(150),
+    message: z.string().trim().min(1).max(10000),
+    mode: z.enum(['test', 'send']),
+    confirmCount: z.number().int().min(0).optional(),
+  })
+  .refine((body) => body.audience !== 'selected' || body.mode === 'test' || (body.leadIds?.length ?? 0) > 0, {
+    path: ['leadIds'],
+    message: 'Pick at least one lead',
+  })
 
 const fail = (error: string, code: string, status: number, extra: object = {}) =>
   NextResponse.json({ success: false, error, code, ...extra, requestId: uuidv4() }, { status })
@@ -71,7 +79,10 @@ export const POST = routeHandler(async (req: NextRequest) => {
   if (running) return fail('Another campaign is still being sent.', 'SEND_IN_PROGRESS', 409)
 
   const scope = await resolveLeadScope(organisationId, ctx.scopeType, user.id, ctx.teamId)
-  const recipients = pickAudience(await eligibleLeads(organisationId, scope), body.audience)
+  // Server-side visibility: hand-picked ids outside the sender's lead scope (or not eligible) are dropped.
+  const recipients = body.audience === 'selected'
+    ? await selectedLeads(organisationId, scope, body.leadIds ?? [])
+    : pickAudience(await eligibleLeads(organisationId, scope), body.audience)
   if (body.confirmCount !== recipients.length) {
     return fail('The audience changed. Review the new count and confirm again.', 'COUNT_CHANGED', 409, { count: recipients.length })
   }
@@ -100,7 +111,12 @@ export const POST = routeHandler(async (req: NextRequest) => {
     resourceType: 'campaign_send',
     resourceId: send.id,
     ipHash,
-    afterJson: { audience: body.audience, recipientCount: recipients.length, subject: body.subject },
+    afterJson: {
+      audience: body.audience,
+      recipientCount: recipients.length,
+      subject: body.subject,
+      ...(body.audience === 'selected' ? { selectedCount: new Set(body.leadIds).size } : {}),
+    },
   })
   return NextResponse.json({ success: true, data: { id: send.id }, requestId: uuidv4() }, { status: 202 })
 })

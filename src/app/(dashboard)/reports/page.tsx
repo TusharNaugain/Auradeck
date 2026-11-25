@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { errorMessage, useHasPermission, useSession } from '@/lib/client/hooks'
 import { useOverview, type OverviewDashboard } from '@/lib/client/overview'
 import { enumLabel, formatCurrency, formatNumber, formatPercent } from '@/lib/client/format'
+import { CLOSED_STAGES, LEAD_STAGES, stageTitle } from '@/lib/leads/stages'
 
 const EXPORT_ENTITIES = [
   { entity: 'leads', label: 'Leads' },
@@ -18,8 +19,8 @@ const EXPORT_ENTITIES = [
   { entity: 'opportunities', label: 'Opportunities' },
 ]
 
-/** Funnel order matters for a conversion report, so the stage list is explicit. */
-const LEAD_FUNNEL = ['NEW', 'CONTACTED', 'QUALIFIED', 'DEMO_BOOKED', 'PROPOSAL_SENT', 'NEGOTIATION', 'CONVERTED']
+/** Funnel order matters for a conversion report: New → … → Paid (churned and dead sit outside it). */
+const LEAD_FUNNEL = LEAD_STAGES.filter((stage) => !(CLOSED_STAGES as readonly string[]).includes(stage))
 
 type Bucket = { label: string; count: number }
 
@@ -32,24 +33,28 @@ function reportSections(dashboard: OverviewDashboard) {
   if (sales?.canViewLeads && leadsByStage && leadsBySource) {
     sections.push({
       title: 'Lead funnel',
-      description: 'Every open lead by lifecycle stage, in funnel order.',
+      description: 'Every lead by pipeline stage, in funnel order (New inbox, then steps 1–7).',
       buckets: LEAD_FUNNEL.map(stage => ({
-        label: enumLabel(stage),
+        label: stageTitle(stage),
         count: leadsByStage.find(b => b.stage === stage)?.count ?? 0,
       })),
       funnel: true,
     })
+    const churned = leadsByStage.find(b => b.stage === 'CHURNED')?.count ?? 0
+    if (churned > 0) {
+      sections.push({ title: 'Churned / paused', description: 'Customers who left or paused (step 8).', buckets: [{ label: stageTitle('CHURNED'), count: churned }] })
+    }
     const sources = leadsBySource
       .map(b => ({ label: enumLabel(b.source), count: b.count }))
       .sort((a, b) => b.count - a.count)
     sections.push({ title: 'Leads by source', description: 'Where pipeline originates.', buckets: sources })
   }
 
-  if (dashboard.success) {
+  if (dashboard.success?.onboardingByStatus) {
     sections.push({
-      title: 'Account health',
-      description: 'Renewal risk across the book of business.',
-      buckets: dashboard.success.accountsByHealth.map(b => ({ label: enumLabel(b.status), count: b.count })),
+      title: 'Onboarding progress',
+      description: 'Customer onboarding projects by status.',
+      buckets: dashboard.success.onboardingByStatus.map(b => ({ label: enumLabel(b.status), count: b.count })),
     })
   }
 
@@ -75,7 +80,6 @@ export default function ReportsPage() {
   const sales = dashboard?.sales
   const success = dashboard?.success
   const management = dashboard?.management
-  const practice = dashboard?.practice
 
   return (
     <div className="space-y-5">
@@ -134,20 +138,8 @@ export default function ReportsPage() {
                 <Metric label="Win rate" value={formatPercent(sales.winRate ?? 0)} />
               </>
             )}
-            {success && (
-              <>
-                <Metric label="Renewals next 90 days" value={formatNumber(success.renewalsIn30 + success.renewalsIn60 + success.renewalsIn90)} />
-                {success.onboardingActive !== null && (
-                  <Metric label="Onboarding in flight" value={formatNumber(success.onboardingActive)} />
-                )}
-                <Metric label="At-risk accounts" value={formatNumber(success.atRiskAccounts)} tone={success.atRiskAccounts > 0 ? 'danger' : undefined} />
-              </>
-            )}
-            {practice && (
-              <>
-                <Metric label="Active clients" value={formatNumber(practice.activeClients)} />
-                <Metric label="Outstanding balance" value={formatCurrency(practice.outstandingBalance, { compact: true })} />
-              </>
+            {success && success.onboardingActive !== null && (
+              <Metric label="Onboarding in flight" value={formatNumber(success.onboardingActive)} />
             )}
             {management && (
               <>
@@ -161,18 +153,6 @@ export default function ReportsPage() {
           {reportSections(dashboard).map(section => (
             <BreakdownTable key={section.title} title={section.title} description={section.description} buckets={section.buckets} funnel={section.funnel} />
           ))}
-
-          {success && (
-            <BreakdownTable
-              title="Renewal window"
-              description="Accounts with a renewal date in each window."
-              buckets={[
-                { label: 'Next 30 days', count: success.renewalsIn30 },
-                { label: '31–60 days', count: success.renewalsIn60 },
-                { label: '61–90 days', count: success.renewalsIn90 },
-              ]}
-            />
-          )}
 
           <Card>
             <CardHeader>
@@ -199,10 +179,6 @@ export default function ReportsPage() {
                   Your role does not include data export. Ask a super admin to enable it in Settings → Roles &amp; access.
                 </p>
               )}
-              <p className="text-xs text-muted-foreground">
-                Clients are deliberately not exportable — patient identity and health data stay inside the practice
-                workspace, per the security policy.
-              </p>
             </CardContent>
           </Card>
         </>

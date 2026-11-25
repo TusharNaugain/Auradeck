@@ -1,7 +1,8 @@
 'use client'
 
 import React from 'react'
-import { AlertTriangle, Loader2, Megaphone, Send } from 'lucide-react'
+import { AlertTriangle, Loader2, Megaphone, Send, X } from 'lucide-react'
+import { stageLabel } from '@/lib/leads/stages'
 import { toast } from 'sonner'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
@@ -20,7 +21,9 @@ import { formatRelative } from '@/lib/client/format'
 import { errorMessage, useHasPermission, useInvalidate, useSession } from '@/lib/client/hooks'
 import { cn } from '@/lib/utils/cn'
 
-type Audience = 'priority' | 'others' | 'all'
+type Audience = 'priority' | 'others' | 'all' | 'selected'
+type GroupAudience = Exclude<Audience, 'selected'>
+type PickableLead = { id: string; name: string; email: string; isPriority: boolean; lifecycleStage: string }
 type Status = 'queued' | 'syncing' | 'sending' | 'sent' | 'failed'
 type Mode = 'test' | 'send'
 
@@ -39,7 +42,9 @@ const AUDIENCES: { id: Audience; label: string }[] = [
   { id: 'priority', label: 'Priority reachout' },
   { id: 'others', label: 'Others' },
   { id: 'all', label: 'Everyone' },
+  { id: 'selected', label: 'Pick leads' },
 ]
+const MAX_PICKED = 500
 const STATUS: Record<Status, { label: string; variant: 'secondary' | 'warning' | 'success' | 'destructive' }> = {
   queued: { label: 'Queued', variant: 'secondary' },
   syncing: { label: 'Preparing', variant: 'warning' },
@@ -50,7 +55,80 @@ const STATUS: Record<Status, { label: string; variant: 'secondary' | 'warning' |
 const FIELD = 'border-muted-foreground/40 bg-background'
 const SAMPLE_MESSAGE = 'Your message will appear here.\n\nWrite it on the left and this preview updates as you type.'
 const isActive = (s: Status) => s === 'queued' || s === 'syncing' || s === 'sending'
-const audienceLabel = (id: Audience) => AUDIENCES.find((a) => a.id === id)?.label ?? id
+const audienceLabel = (id: Audience) => (id === 'selected' ? 'Hand-picked leads' : AUDIENCES.find((a) => a.id === id)?.label ?? id)
+
+/** Search and tick individual leads. Lists only leads the server says this user may email. */
+function LeadPicker({ picked, onChange }: { picked: PickableLead[]; onChange: (leads: PickableLead[]) => void }) {
+  const [input, setInput] = React.useState('')
+  const [search, setSearch] = React.useState('')
+  React.useEffect(() => {
+    const timer = setTimeout(() => setSearch(input.trim()), 250)
+    return () => clearTimeout(timer)
+  }, [input])
+  const results = useQuery({
+    queryKey: ['campaigns', 'pickable-leads', search],
+    queryFn: () => api.get<PickableLead[]>('/api/campaigns/send/leads', { search: search || undefined }),
+    staleTime: 30_000,
+  })
+  const pickedIds = new Set(picked.map((lead) => lead.id))
+  function toggle(lead: PickableLead) {
+    if (pickedIds.has(lead.id)) return onChange(picked.filter((item) => item.id !== lead.id))
+    if (picked.length >= MAX_PICKED) return toast.error(`You can pick up to ${MAX_PICKED} leads per send.`)
+    onChange([...picked, lead])
+  }
+
+  return (
+    <div className="space-y-2 rounded-md border border-muted-foreground/30 p-3">
+      <Input
+        className={FIELD}
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        placeholder="Search leads by name, email or practice…"
+        aria-label="Search leads to email"
+      />
+      {picked.length > 0 && (
+        <div className="flex flex-wrap gap-1.5" aria-label="Picked leads">
+          {picked.map((lead) => (
+            <Badge key={lead.id} variant="secondary" className="gap-1 pr-1 font-normal">
+              {lead.name || lead.email}
+              <button type="button" aria-label={`Remove ${lead.name || lead.email}`} onClick={() => toggle(lead)} className="rounded-full p-0.5 hover:bg-background">
+                <X className="size-3" />
+              </button>
+            </Badge>
+          ))}
+          <button type="button" className="text-xs text-muted-foreground underline" onClick={() => onChange([])}>Clear all</button>
+        </div>
+      )}
+      <div className="max-h-64 overflow-y-auto rounded-md border border-border/60">
+        {results.isLoading ? (
+          <Skeleton className="h-24 w-full" />
+        ) : results.isError ? (
+          <p className="p-3 text-sm text-destructive">{errorMessage(results.error)}</p>
+        ) : !results.data?.length ? (
+          <p className="p-3 text-sm text-muted-foreground">{search ? 'No matching leads you can email.' : 'No leads you can email yet.'}</p>
+        ) : (
+          <ul>
+            {results.data.map((lead) => (
+              <li key={lead.id} className="border-b border-border/60 last:border-0">
+                <label className="flex cursor-pointer items-center gap-3 px-3 py-2 text-sm hover:bg-muted/40">
+                  <input type="checkbox" className="accent-primary" checked={pickedIds.has(lead.id)} onChange={() => toggle(lead)} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium">{lead.name || lead.email}</span>
+                    <span className="block truncate text-xs text-muted-foreground">{lead.email}</span>
+                  </span>
+                  <span className="shrink-0 text-xs text-muted-foreground">{stageLabel(lead.lifecycleStage)}</span>
+                </label>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Showing up to 50 matches — search to find others. Only leads you can see, with a valid email, not dead and not unsubscribed, are listed.
+      </p>
+    </div>
+  )
+}
 
 export default function CampaignsPage() {
   const { data: session } = useSession()
@@ -67,7 +145,7 @@ export default function CampaignsPage() {
     <div className="space-y-5">
       <PageHeader
         title="Campaigns"
-        description="Send one message to a group of leads. Unsubscribe links and bounces are handled automatically."
+        description="Send one message to a group of leads, or to leads you pick one by one. Unsubscribe links and bounces are handled automatically."
       />
       {canSend ? (
         <>
@@ -105,16 +183,17 @@ function Composer() {
   const [confirming, setConfirming] = React.useState(false)
   const [notConfigured, setNotConfigured] = React.useState(false)
 
+  const [picked, setPicked] = React.useState<PickableLead[]>([])
   const counts = useQuery({
     queryKey: ['campaigns', 'audiences'],
-    queryFn: () => api.get<Record<Audience, number>>('/api/campaigns/send/audiences'),
+    queryFn: () => api.get<Record<GroupAudience, number>>('/api/campaigns/send/audiences'),
   })
-  const count = counts.data?.[audience] ?? 0
+  const count = audience === 'selected' ? picked.length : counts.data?.[audience] ?? 0
   // If the chosen group is empty (e.g. nobody is Priority yet), switch to the first group that has people.
   React.useEffect(() => {
     const data = counts.data
-    if (!data || data[audience]) return
-    const next = AUDIENCES.find(({ id }) => data[id] > 0)
+    if (!data || audience === 'selected' || data[audience]) return
+    const next = AUDIENCES.find(({ id }) => id !== 'selected' && data[id as GroupAudience] > 0)
     if (next) setAudience(next.id)
   }, [counts.data, audience])
   const ready = subject.trim() !== '' && message.trim() !== ''
@@ -135,6 +214,7 @@ function Composer() {
     mutationFn: (mode: Mode) =>
       api.post('/api/campaigns/send', {
         audience,
+        ...(audience === 'selected' && { leadIds: picked.map((lead) => lead.id) }),
         subject: subject.trim(),
         message,
         mode,
@@ -146,6 +226,7 @@ function Composer() {
       setConfirming(false)
       setSubject('')
       setMessage('')
+      setPicked([])
       toast.success('Campaign is on its way')
       invalidate(['campaigns'])
     },
@@ -158,6 +239,9 @@ function Composer() {
       }
       if (code === 'COUNT_CHANGED') {
         setConfirming(false)
+        if (audience === 'selected') {
+          return toast.error('Some picked leads can no longer be emailed (removed, unsubscribed, marked dead or no longer visible to you). Re-pick and send again.')
+        }
         const fresh = (await counts.refetch()).data?.[audience]
         return toast.error(`The audience changed and now has ${fresh ?? 'a different number of'} people. Review and send again.`)
       }
@@ -178,9 +262,10 @@ function Composer() {
 
           <Step n={1} title="Who should get this email?">
             {counts.isError && <p className="text-sm text-destructive">Could not load audience sizes.</p>}
-            <div className="grid gap-2 sm:grid-cols-3">
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
               {AUDIENCES.map(({ id, label }) => {
-                const n = counts.data?.[id]
+                const n = id === 'selected' ? undefined : counts.data?.[id]
+                const disabled = id !== 'selected' && !n
                 return (
                   <label
                     key={id}
@@ -189,13 +274,15 @@ function Composer() {
                       'has-[:checked]:border-primary has-[:checked]:bg-primary/10 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring'
                     )}
                   >
-                    <input type="radio" name="audience" className="accent-primary" checked={audience === id} disabled={!n} onChange={() => setAudience(id)} />
+                    <input type="radio" name="audience" className="accent-primary" checked={audience === id} disabled={disabled} onChange={() => setAudience(id)} />
                     {label}
                     {n !== undefined && <span className="text-muted-foreground">({n})</span>}
+                    {id === 'selected' && picked.length > 0 && <span className="text-muted-foreground">({picked.length})</span>}
                   </label>
                 )
               })}
             </div>
+            {audience === 'selected' && <LeadPicker picked={picked} onChange={setPicked} />}
             <p className="text-xs text-muted-foreground">
               Only leads with a valid email are counted. Dead, archived and unsubscribed leads are left out automatically.
             </p>
@@ -283,7 +370,7 @@ function Composer() {
           <DialogHeader>
             <DialogTitle>Send this campaign?</DialogTitle>
             <DialogDescription>
-              {count} {count === 1 ? 'person' : 'people'} in &ldquo;{audienceLabel(audience)}&rdquo; will receive &ldquo;{subject.trim()}&rdquo;. This cannot be undone.
+              {count} {count === 1 ? 'person' : 'people'} {audience === 'selected' ? '(hand-picked leads)' : <>in &ldquo;{audienceLabel(audience)}&rdquo;</>} will receive &ldquo;{subject.trim()}&rdquo;. This cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

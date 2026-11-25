@@ -208,9 +208,6 @@ async function planRow(
 
     const blanks = requiredBlanks(merge.crmPatch)
     if (blanks.length) return reject(`Required field cannot be cleared: ${blanks.join(', ')}`)
-    if (merge.crmPatch.lifecycleStage === 'converted') {
-      return reject('Set a lead to "converted" from the CRM; conversion creates the account and contact')
-    }
     const problems = validateValues(merge.crmPatch)
     if (problems.length) return reject(problems.join('; '))
 
@@ -247,7 +244,6 @@ async function planRow(
   // Early-access sheets only carry an email: use its prefix as a clearly temporary name.
   record.firstName ??= placeholderNameFromEmail(record.email)
   if (!record.firstName) return reject('A name or an email address is required')
-  if (record.lifecycleStage === 'converted') return reject('A new lead cannot start as "converted"')
   if (!record.email && !record.phone && !record.whatsappNumber) {
     return reject('Provide at least an email, phone or WhatsApp number')
   }

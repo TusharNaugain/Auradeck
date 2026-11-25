@@ -100,22 +100,6 @@ export const GET = routeHandler(async (req: NextRequest) => {
     })))
   }
 
-  // Clients — names only, never PII; respects narrow practitioner scope
-  if (ctx.permissions.has(PERMISSIONS.CLIENTS_VIEW) || ctx.permissions.has(PERMISSIONS.SUPER_ADMIN)) {
-    const clients = await db.client.findMany({
-      where: {
-        organisationId, deletedAt: null,
-        ...(ctx.scopeType === 'OWN' ? { assignedPractitionerId: user.id } : {}),
-        OR: [{ firstName: contains }, { lastName: contains }, { clientNumber: contains }],
-      },
-      take: ENTITY_LIMIT,
-      select: { id: true, clientNumber: true, firstName: true, lastName: true },
-    })
-    results.push(...clients.map((c) => ({
-      type: 'client', id: c.id, title: `${c.firstName} ${c.lastName}`, subtitle: c.clientNumber, url: '/clients',
-    })))
-  }
-
   void ctx
   return NextResponse.json({ success: true, data: { results: results.slice(0, 40) }, requestId: uuidv4() })
 })

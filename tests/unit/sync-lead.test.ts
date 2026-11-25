@@ -58,7 +58,7 @@ describe('creating leads from the sheet', () => {
       { rowRef: 'no-ref', fields: { firstName: 'X', email: 'x@example.test' } },
       newRow('b', { firstName: 'Y' }),
       newRow('c', { firstName: 'Z', email: 'not-an-email' }),
-      newRow('d', { firstName: 'W', email: 'w@example.test', lifecycleStage: 'converted' }),
+      newRow('d', { firstName: 'W', email: 'w@example.test', lifecycleStage: 'maybe later' }),
     ]))
     expect(res.rows.map(r => r.status)).toEqual(['rejected', 'rejected', 'rejected', 'rejected'])
     expect(store.rejected).toHaveLength(4)
@@ -144,7 +144,7 @@ describe('updating leads from the sheet', () => {
       { rowRef: 'unknown', leadNumber: 'LD-999999', fields: { city: 'X' } },
       { rowRef: 'archived', leadNumber: archived.leadNumber, fields: { city: 'X' } },
       { rowRef: 'blank', leadNumber: live.leadNumber, fields: { firstName: '' } },
-      { rowRef: 'convert', leadNumber: live.leadNumber, fields: { lifecycleStage: 'converted' } },
+      { rowRef: 'unknownstage', leadNumber: live.leadNumber, fields: { lifecycleStage: 'proposal maybe' } },
       { rowRef: 'badstage', leadNumber: live.leadNumber, fields: { lifecycleStage: 'banana' } },
     ]))
     expect(res.rows.map(r => r.status)).toEqual(['rejected', 'rejected', 'rejected', 'rejected', 'rejected'])

@@ -69,15 +69,15 @@ export const DEMO_SESSION: SessionPayload = {
 
 const records: Record<string, Record<string, unknown>[]> = {
   '/api/leads': [
-    { id: 'demo-lead-1', leadNumber: 'LEAD-000101', firstName: 'Jordan', lastName: 'Lee', fullName: 'Jordan Lee', email: 'jordan@example.test', phoneNumber: '+919876543210', whatsappNumber: '+919876543210', website: 'https://harbortherapy.example.test', organisationName: 'Harbor Therapy', leadSource: 'WEBSITE', lifecycleStage: 'QUALIFIED', leadScore: 82, assignedToUserId: 'demo-user', assignedTo: { id: 'demo-user', fullName: 'Alex Morgan' }, nextFollowUpAt: date(0), firstContactedAt: date(-2), lastContactedAt: date(-1), createdAt: dateInCurrentMonth(1), city: 'Pune', state: 'Maharashtra', tags: ['website', 'priority'] },
+    { id: 'demo-lead-1', leadNumber: 'LEAD-000101', firstName: 'Jordan', lastName: 'Lee', fullName: 'Jordan Lee', email: 'jordan@example.test', phoneNumber: '+919876543210', whatsappNumber: '+919876543210', website: 'https://harbortherapy.example.test', organisationName: 'Harbor Therapy', leadSource: 'WEBSITE', lifecycleStage: 'INTERESTED', leadScore: 82, assignedToUserId: 'demo-user', assignedTo: { id: 'demo-user', fullName: 'Alex Morgan' }, nextFollowUpAt: date(0), firstContactedAt: date(-2), lastContactedAt: date(-1), createdAt: dateInCurrentMonth(1), city: 'Pune', state: 'Maharashtra', tags: ['website', 'priority'] },
     { id: 'demo-lead-2', leadNumber: 'LEAD-000102', firstName: 'Sam', lastName: 'Taylor', fullName: 'Sam Taylor', email: 'sam@example.test', phoneNumber: '+919876543211', whatsappNumber: null, website: null, organisationName: 'Willow Wellness', leadSource: 'REFERRAL', lifecycleStage: 'CONTACTED', leadScore: 64, assignedToUserId: 'demo-user', assignedTo: { id: 'demo-user', fullName: 'Alex Morgan' }, nextFollowUpAt: date(0), firstContactedAt: date(-4), lastContactedAt: date(-2), createdAt: dateInCurrentMonth(2), city: 'Mumbai', state: 'Maharashtra', tags: ['referral'] },
     { id: 'demo-lead-3', leadNumber: 'LEAD-000103', firstName: 'Casey', lastName: 'Patel', fullName: 'Casey Patel', email: 'casey@example.test', phoneNumber: null, whatsappNumber: '+919876543212', website: null, organisationName: 'Cedar Care Clinic', leadSource: 'PARTNER', lifecycleStage: 'NEW', leadScore: 48, assignedToUserId: null, assignedTo: null, nextFollowUpAt: date(-2), firstContactedAt: null, lastContactedAt: null, createdAt: dateInCurrentMonth(3), city: 'Bengaluru', state: 'Karnataka', tags: [] },
     { id: 'demo-lead-5', leadNumber: 'LEAD-000105', firstName: 'Aisha', lastName: 'Noor', fullName: 'Aisha Noor', email: 'aisha@example.test', phoneNumber: '+919876543214', whatsappNumber: '+919876543214', website: null, organisationName: 'Maple Family Care', leadSource: 'REFERRAL', lifecycleStage: 'CONTACTED', leadScore: 72, assignedToUserId: 'demo-user', assignedTo: { id: 'demo-user', fullName: 'Alex Morgan' }, nextFollowUpAt: date(2), firstContactedAt: date(-1), lastContactedAt: date(-1), createdAt: dateInCurrentMonth(4), city: 'Delhi', state: 'Delhi', tags: ['priority'], jobTitle: 'Practice Manager', preferredContactMethod: 'PHONE', currentSoftware: 'Paper records', estimatedUsers: 8, painPoints: 'Manual appointment reminders' },
     { id: 'demo-lead-6', leadNumber: 'LEAD-000106', firstName: 'Rahul', lastName: 'Mehta', fullName: 'Rahul Mehta', email: 'rahul@example.test', phoneNumber: '+919876543215', whatsappNumber: null, website: null, organisationName: 'BrightPath Clinic', leadSource: 'WEBSITE', lifecycleStage: 'NEW', leadScore: 55, assignedToUserId: null, assignedTo: null, nextFollowUpAt: date(3), firstContactedAt: null, lastContactedAt: null, createdAt: dateInCurrentMonth(5), city: 'Jaipur', state: 'Rajasthan', tags: ['website'], estimatedUsers: 12, useCase: 'Online booking and client records' },
-    { id: 'demo-lead-7', leadNumber: 'LEAD-000107', firstName: 'Nisha', lastName: 'Gupta', fullName: 'Nisha Gupta', email: 'nisha@example.test', phoneNumber: '+919876543216', whatsappNumber: '+919876543216', website: 'https://sunrisewellness.example.test', organisationName: 'Sunrise Wellness', leadSource: 'WEBSITE', lifecycleStage: 'QUALIFIED', leadScore: 86, assignedToUserId: 'demo-user', assignedTo: { id: 'demo-user', fullName: 'Alex Morgan' }, nextFollowUpAt: date(1), firstContactedAt: date(-5), lastContactedAt: date(-2), createdAt: dateInCurrentMonth(6), city: 'Hyderabad', state: 'Telangana', tags: ['qualified', 'priority'], jobTitle: 'Owner', budgetRange: '₹10,000–₹20,000/month', expectedTimeline: 'This quarter' },
+    { id: 'demo-lead-7', leadNumber: 'LEAD-000107', firstName: 'Nisha', lastName: 'Gupta', fullName: 'Nisha Gupta', email: 'nisha@example.test', phoneNumber: '+919876543216', whatsappNumber: '+919876543216', website: 'https://sunrisewellness.example.test', organisationName: 'Sunrise Wellness', leadSource: 'WEBSITE', lifecycleStage: 'INTERESTED', leadScore: 86, assignedToUserId: 'demo-user', assignedTo: { id: 'demo-user', fullName: 'Alex Morgan' }, nextFollowUpAt: date(1), firstContactedAt: date(-5), lastContactedAt: date(-2), createdAt: dateInCurrentMonth(6), city: 'Hyderabad', state: 'Telangana', tags: ['qualified', 'priority'], jobTitle: 'Owner', budgetRange: '₹10,000–₹20,000/month', expectedTimeline: 'This quarter' },
     { id: 'demo-lead-8', leadNumber: 'LEAD-000108', firstName: 'Arjun', lastName: 'Kapoor', fullName: 'Arjun Kapoor', email: 'arjun@example.test', phoneNumber: '+919876543217', whatsappNumber: null, website: null, organisationName: 'Evergreen Health', leadSource: 'PARTNER', lifecycleStage: 'CONTACTED', leadScore: 61, assignedToUserId: 'demo-user', assignedTo: { id: 'demo-user', fullName: 'Alex Morgan' }, nextFollowUpAt: date(4), firstContactedAt: date(-30), lastContactedAt: date(-7), createdAt: date(-35), city: 'Chandigarh', state: 'Punjab', tags: ['partner'] },
     { id: 'demo-lead-9', leadNumber: 'LEAD-000109', firstName: 'Kavya', lastName: 'Rao', fullName: 'Kavya Rao', email: 'kavya@example.test', phoneNumber: '+919876543218', whatsappNumber: '+919876543218', website: null, organisationName: 'Lotus Care', leadSource: 'REFERRAL', lifecycleStage: 'NEW', leadScore: 46, assignedToUserId: null, assignedTo: null, nextFollowUpAt: null, firstContactedAt: null, lastContactedAt: null, createdAt: date(-50), city: 'Kochi', state: 'Kerala', tags: ['referral'] },
-    { id: 'demo-lead-10', leadNumber: 'LEAD-000110', firstName: 'Dev', lastName: 'Shah', fullName: 'Dev Shah', email: 'dev@example.test', phoneNumber: '+919876543219', whatsappNumber: null, website: null, organisationName: 'CalmMind Center', leadSource: 'WEBSITE', lifecycleStage: 'PROPOSAL_SENT', leadScore: 78, assignedToUserId: 'demo-user', assignedTo: { id: 'demo-user', fullName: 'Alex Morgan' }, nextFollowUpAt: date(2), firstContactedAt: date(-55), lastContactedAt: date(-3), createdAt: date(-60), city: 'Ahmedabad', state: 'Gujarat', tags: ['proposal'], budgetRange: '₹25,000/month', expectedTimeline: 'Next month' },
+    { id: 'demo-lead-10', leadNumber: 'LEAD-000110', firstName: 'Dev', lastName: 'Shah', fullName: 'Dev Shah', email: 'dev@example.test', phoneNumber: '+919876543219', whatsappNumber: null, website: null, organisationName: 'CalmMind Center', leadSource: 'WEBSITE', lifecycleStage: 'DEMO_ATTENDED', leadScore: 78, assignedToUserId: 'demo-user', assignedTo: { id: 'demo-user', fullName: 'Alex Morgan' }, nextFollowUpAt: date(2), firstContactedAt: date(-55), lastContactedAt: date(-3), createdAt: date(-60), city: 'Ahmedabad', state: 'Gujarat', tags: ['proposal'], budgetRange: '₹25,000/month', expectedTimeline: 'Next month' },
     {
       id: 'demo-lead-4',
       leadNumber: 'LEAD-000104',
@@ -90,7 +90,7 @@ const records: Record<string, Record<string, unknown>[]> = {
       website: null,
       organisationName: 'Willow Wellness',
       leadSource: 'CAMPAIGN',
-      lifecycleStage: 'CONVERTED',
+      lifecycleStage: 'SIGNED_UP',
       leadScore: 91,
       assignedToUserId: 'demo-user',
       assignedTo: { id: 'demo-user', fullName: 'Alex Morgan' },
@@ -227,13 +227,13 @@ const demoOverview = {
       leadsToday: 0,
       leadsThisWeek: 5,
       leadsThisMonth: 6,
-      qualifiedLeads: 2,
+      interestedLeads: 2,
       leadsByStage: [
         { stage: 'NEW', count: 3 },
         { stage: 'CONTACTED', count: 3 },
-        { stage: 'QUALIFIED', count: 2 },
-        { stage: 'PROPOSAL_SENT', count: 1 },
-        { stage: 'CONVERTED', count: 1 },
+        { stage: 'INTERESTED', count: 2 },
+        { stage: 'DEMO_ATTENDED', count: 1 },
+        { stage: 'SIGNED_UP', count: 1 },
       ],
       leadsBySource: [
         { source: 'WEBSITE', count: 4 },
@@ -254,14 +254,6 @@ const demoOverview = {
       overdueFollowups: 1,
     },
     success: {
-      accountsByHealth: [
-        { status: 'HEALTHY', count: 6 },
-        { status: 'AT_RISK', count: 2 },
-        { status: 'CRITICAL', count: 1 },
-      ],
-      renewalsIn30: 1,
-      renewalsIn60: 2,
-      renewalsIn90: 3,
       onboardingActive: 2,
       onboardingCompleted: 4,
       onboardingByStatus: [
@@ -269,7 +261,6 @@ const demoOverview = {
         { status: 'IN_PROGRESS', count: 1 },
         { status: 'COMPLETED', count: 4 },
       ],
-      atRiskAccounts: 3,
     },
     billing: {
       trialSubscriptions: 2,
@@ -279,12 +270,6 @@ const demoOverview = {
       { status: 'ACTIVE', count: 6, amount: 104400 },
         { status: 'PAST_DUE', count: 1, amount: 24900 },
       ],
-    },
-    practice: {
-      appointmentsToday: 1,
-      activeClients: 2,
-      newEnquiriesThisWeek: 1,
-      outstandingBalance: 1200,
     },
     own: { tasksDueToday: 2, overdueTasks: 1 },
   },
@@ -410,8 +395,8 @@ function getSheetImportOverview(): typeof demoOverview {
   }).length
   overview.dashboard.sales.leadsThisWeek = countCreatedSince(weekAgo)
   overview.dashboard.sales.leadsThisMonth = countCreatedSince(monthStart)
-  overview.dashboard.sales.qualifiedLeads = leads.filter((lead) =>
-    lead.lifecycleStage === 'QUALIFIED'
+  overview.dashboard.sales.interestedLeads = leads.filter((lead) =>
+    lead.lifecycleStage === 'INTERESTED'
   ).length
   overview.dashboard.sales.leadsByStage = Array.from(stages, ([stage, count]) => ({ stage, count }))
   overview.dashboard.sales.leadsBySource = Array.from(sources, ([source, count]) => ({ source, count }))
@@ -564,10 +549,17 @@ function updateDemoLead(id: string, input: unknown): Record<string, unknown> {
   }
   const lead = getDemoLeads().find((item) => item.id === id)
   if (!lead) throw new Error('Demo lead not found')
-  const values = input as Record<string, unknown>
+  const { addExtraContact, removeExtraContactId, ...values } = input as Record<string, unknown>
+  // Mirrors the server: extra contacts are appended / removed, never replacing source email or phone.
+  let extraContacts = Array.isArray(lead.extraContacts) ? (lead.extraContacts as Record<string, unknown>[]) : []
+  if (typeof removeExtraContactId === 'string') extraContacts = extraContacts.filter((item) => item.id !== removeExtraContactId)
+  if (addExtraContact && typeof addExtraContact === 'object') {
+    extraContacts = [...extraContacts, { ...(addExtraContact as Record<string, unknown>), id: crypto.randomUUID(), addedAt: new Date().toISOString(), addedBy: demoUser.id }]
+  }
   const updated = {
     ...lead,
     ...values,
+    extraContacts,
     ...(values.phone !== undefined ? { phoneNumber: values.phone } : {}),
     ...(values.leadSource !== undefined ? { leadSource: String(values.leadSource).toUpperCase() } : {}),
     ...(values.lifecycleStage !== undefined ? { lifecycleStage: String(values.lifecycleStage).toUpperCase() } : {}),
@@ -579,12 +571,12 @@ function updateDemoLead(id: string, input: unknown): Record<string, unknown> {
   }
   const saved = saveDemoLead(updated)
   const nextStage = String(updated.lifecycleStage ?? '').toUpperCase()
-  if (nextStage !== String(lead.lifecycleStage ?? '').toUpperCase() && ['LOST', 'DISQUALIFIED'].includes(nextStage)) {
+  if (nextStage !== String(lead.lifecycleStage ?? '').toUpperCase() && nextStage === 'LOST') {
     createDemoActivity({
       activityType: 'note',
-      subject: nextStage === 'LOST' ? 'Lead marked as dead' : 'Lead disqualified',
+      subject: 'Lead marked as dead',
       description: `Lead moved from ${String(lead.lifecycleStage)} to ${nextStage}.`,
-      outcome: nextStage === 'LOST' ? 'Lead closed as lost' : 'Lead disqualified',
+      outcome: 'Lead closed as dead',
       status: 'completed',
       relatedLeadId: id,
       visibility: 'team',

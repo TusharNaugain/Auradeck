@@ -8,7 +8,7 @@ const client = vi.hoisted(() => ({
   createSegment: vi.fn(), addContactsToSegment: vi.fn(), sendBroadcast: vi.fn(), sendTestEmail: vi.fn(),
 }))
 const guardedRoute = vi.hoisted(() => vi.fn())
-const env = vi.hoisted(() => ({ RESEND_API_KEY: 're_test' as string | undefined }))
+const env = vi.hoisted(() => ({ RESEND_API_KEY: 're_test' as string | undefined, NEXT_PUBLIC_APP_URL: 'https://crm.example.test' }))
 
 vi.mock('@/lib/db', () => ({ db }))
 vi.mock('@/env', () => ({ env }))
@@ -84,7 +84,7 @@ describe('POST /api/campaigns/send', () => {
     })
     db.campaignSend.count.mockResolvedValue(0)
     db.campaignSend.create.mockResolvedValue({ id: 's1' })
-    db.lead.findMany.mockResolvedValue([{ email: 'a@x.com', firstName: 'A', lastName: 'B', isPriority: false, consentStatus: null }])
+    db.lead.findMany.mockResolvedValue([{ id: 'l1', email: 'a@x.com', firstName: 'A', lastName: 'B', isPriority: false, consentStatus: null, lifecycleStage: 'NEW' }])
   })
 
   it('requires the campaigns.send permission and a strict rate limit', async () => {
@@ -128,5 +128,28 @@ describe('POST /api/campaigns/send', () => {
     expect((await res.json()).data).toEqual({ id: 's1' })
     expect(db.campaignSend.create.mock.calls[0][0].data).toMatchObject({ organisationId: 'org', recipientCount: 1 })
     await vi.waitFor(() => expect(client.sendBroadcast).toHaveBeenCalled())
+  })
+
+  it('sends to hand-picked leads, filtered by the sender scope and eligibility', async () => {
+    client.addContactsToSegment.mockResolvedValue(undefined)
+    const res = await post({ ...send, audience: 'selected', leadIds: ['l1', 'l-hidden'], confirmCount: 1 })
+    expect(res.status).toBe(202)
+    const { AND } = db.lead.findMany.mock.calls[0][0].where
+    expect(AND[2]).toEqual({ id: { in: ['l1', 'l-hidden'] } })
+    expect(db.campaignSend.create.mock.calls[0][0].data).toMatchObject({ audience: 'selected', recipientCount: 1 })
+    await vi.waitFor(() => expect(client.sendBroadcast).toHaveBeenCalled())
+  })
+
+  it('409s when some hand-picked leads are no longer eligible or visible', async () => {
+    const res = await post({ ...send, audience: 'selected', leadIds: ['l1', 'l-hidden'], confirmCount: 2 })
+    expect(res.status).toBe(409)
+    expect(await res.json()).toMatchObject({ code: 'COUNT_CHANGED', count: 1 })
+    expect(db.campaignSend.create).not.toHaveBeenCalled()
+  })
+
+  it('rejects a "selected" send without leads', async () => {
+    const res = await post({ ...send, audience: 'selected', leadIds: [] })
+    expect(res.status).toBe(400)
+    expect(db.campaignSend.create).not.toHaveBeenCalled()
   })
 })

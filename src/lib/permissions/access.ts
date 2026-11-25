@@ -45,12 +45,12 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
     capabilities: [
       { key: 'leads.view', label: 'View leads', description: 'Open the Leads page. Which leads appear depends on visibility.', permissions: [P.LEADS_VIEW] },
       { key: 'leads.create', label: 'Create leads', description: 'Add new leads by hand.', permissions: [P.LEADS_CREATE] },
-      { key: 'leads.update', label: 'Edit leads', description: 'Change details, stage, follow-ups and priority of visible leads.', permissions: [P.LEADS_UPDATE] },
+      { key: 'leads.update', label: 'Edit leads', description: 'Edit name, stage, next action, follow-ups and priority, and add extra contacts to visible leads.', permissions: [P.LEADS_UPDATE] },
       { key: 'leads.delete', label: 'Delete leads', description: 'Remove leads.', permissions: [P.LEADS_DELETE] },
       { key: 'leads.assign', label: 'Assign leads', description: 'Give leads to a team member or move them to someone else.', permissions: [P.LEADS_ASSIGN] },
       { key: 'leads.import', label: 'Import leads', description: 'Upload lead files.', permissions: [P.LEADS_IMPORT, P.IMPORT_MANAGE] },
       { key: 'leads.export', label: 'Export leads', description: 'Download visible leads as CSV.', permissions: [P.LEADS_EXPORT] },
-      { key: 'leads.convert', label: 'Convert leads', description: 'Turn a qualified lead into a customer account.', permissions: [P.LEADS_CONVERT] },
+      { key: 'leads.convert', label: 'Convert leads', description: 'Create the customer account for a lead that signed up.', permissions: [P.LEADS_CONVERT] },
     ],
   },
   {
@@ -67,15 +67,15 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
     id: 'success',
     label: 'Customer success',
     capabilities: [
-      { key: 'cs.view', label: 'View customer success', description: 'See onboarding, health, success plans and tickets.', permissions: [P.ONBOARDING_VIEW, P.SUCCESS_VIEW, P.TICKETS_VIEW] },
-      { key: 'cs.manage', label: 'Manage customer success', description: 'Run onboarding, update success plans and handle tickets.', permissions: [P.ONBOARDING_MANAGE, P.SUCCESS_MANAGE, P.TICKETS_CREATE, P.TICKETS_UPDATE, P.TICKETS_MANAGE] },
+      { key: 'cs.view', label: 'View onboarding & tickets', description: 'See customer onboarding projects and support tickets.', permissions: [P.ONBOARDING_VIEW, P.TICKETS_VIEW] },
+      { key: 'cs.manage', label: 'Manage onboarding & tickets', description: 'Run onboarding projects and handle support tickets.', permissions: [P.ONBOARDING_MANAGE, P.TICKETS_CREATE, P.TICKETS_UPDATE, P.TICKETS_MANAGE] },
     ],
   },
   {
     id: 'marketing',
     label: 'Marketing',
     capabilities: [
-      { key: 'campaigns.send', label: 'Send email campaigns', description: 'Write and send campaigns to visible leads.', permissions: [P.CAMPAIGNS_SEND] },
+      { key: 'campaigns.send', label: 'Send email campaigns', description: 'Write and send campaigns to an audience or to hand-picked visible leads.', permissions: [P.CAMPAIGNS_SEND] },
     ],
   },
   {
@@ -167,7 +167,7 @@ export const TEAM_ROLES: TeamRole[] = [
   {
     slug: 'csm_head',
     name: 'CS Manager',
-    description: 'Leads customer success: onboarding, health and renewals.',
+    description: 'Leads customer success: onboarding and support tickets.',
     defaultScope: 'ORGANISATION',
     defaultCapabilities: [
       'leads.view', 'leads.update', 'leads.assign', 'crm.view', 'crm.edit', 'deals.view',
