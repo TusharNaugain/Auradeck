@@ -282,11 +282,16 @@ export const activityListSchema = paginationSchema.extend({
   activityType: activityType.optional(),
   status: activityStatus.optional(),
   assignedToUserId: z.string().optional(),
+  /** Who did it: the team member who logged / owns the activity. */
+  doneByUserId: z.string().max(64).optional(),
   relatedLeadId: z.string().optional(),
   relatedAccountId: z.string().optional(),
   relatedContactId: z.string().optional(),
   relatedOpportunityId: z.string().optional(),
   relatedTicketId: z.string().optional(),
+  /** Only activities linked to a lead. */
+  leadsOnly: z.enum(['true', 'false']).optional(),
+  createdAfter: z.string().datetime().optional(),
   dueBefore: z.string().datetime().optional(),
   dueAfter: z.string().datetime().optional(),
   sortBy: z.enum(['createdAt', 'dueAt', 'subject']).optional().default('createdAt'),

@@ -5,7 +5,7 @@ import { ArrowRight, Check, Info, Lock, Pencil, Plus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { api } from '@/lib/client/api'
-import { errorMessage, useInvalidate } from '@/lib/client/hooks'
+import { errorMessage, useHasPermission, useInvalidate } from '@/lib/client/hooks'
 import { enumLabel, formatDate, formatRelative } from '@/lib/client/format'
 import { cn } from '@/lib/utils/cn'
 import { DEMO_MODE } from '@/lib/demo-mode'
@@ -443,6 +443,124 @@ export function ExtraContacts({
         </form>
       )}
     </div>
+  )
+}
+
+export interface LinkedRecordsLead {
+  id: string
+  fullName: string
+  lifecycleStage: string
+  convertedContactId?: string | null
+  opportunity?: { id: string; opportunityNumber: string; name: string; stage: string } | null
+  convertedAccount?: {
+    id: string
+    accountName: string
+    lifecycleStage?: string | null
+    _count?: { tickets: number }
+    onboardingProjects: { status: string; progressPercentage: number }[]
+  } | null
+}
+
+/**
+ * Where this lead lives in the rest of the CRM. Records are created automatically by the
+ * stage: deal from "3 · Demo scheduled", customer account + onboarding from "5 · Signed up".
+ */
+export function LeadLinkedRecords({ lead }: { lead: LinkedRecordsLead }) {
+  const canCreateTicket = useHasPermission('tickets.create')
+  const [ticketOpen, setTicketOpen] = React.useState(false)
+  const [subject, setSubject] = React.useState('')
+  const [description, setDescription] = React.useState('')
+  const [pending, setPending] = React.useState(false)
+  const invalidate = useInvalidate()
+  const account = lead.convertedAccount
+  const onboarding = account?.onboardingProjects[0]
+
+  async function openTicket(event: React.FormEvent) {
+    event.preventDefault()
+    if (!account || !subject.trim() || !description.trim()) return
+    setPending(true)
+    try {
+      await api.post('/api/tickets', {
+        accountId: account.id,
+        contactId: lead.convertedContactId ?? undefined,
+        subject: subject.trim(),
+        description: description.trim(),
+        source: 'internal',
+      })
+      toast.success('Support ticket opened')
+      setSubject(''); setDescription(''); setTicketOpen(false)
+      invalidate(['lead', lead.id])
+      invalidate(['tickets'])
+    } catch (error) {
+      toast.error(errorMessage(error))
+    } finally {
+      setPending(false)
+    }
+  }
+
+  const Row = ({ label, value, href, hint }: { label: string; value: React.ReactNode; href?: string; hint?: string }) => (
+    <div className="flex items-start justify-between gap-3 border-t border-border/60 py-2 first:border-0">
+      <div className="min-w-0">
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <div className="text-sm font-medium">{value}</div>
+        {hint && <p className="text-[11px] text-muted-foreground">{hint}</p>}
+      </div>
+      {href && <a href={href} className="shrink-0 text-xs text-primary hover:underline">Open →</a>}
+    </div>
+  )
+
+  return (
+    <section className="rounded-xl border border-border/70 p-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Linked records</p>
+      <p className="mt-1 text-[11px] text-muted-foreground">Created automatically by the stage: deal from 3 · Demo scheduled, customer and onboarding from 5 · Signed up.</p>
+      <div className="mt-2">
+        <Row
+          label="Deal (Opportunities)"
+          value={lead.opportunity ? `${lead.opportunity.opportunityNumber} · ${enumLabel(lead.opportunity.stage)}` : <span className="font-normal text-muted-foreground">Not yet — created at 3 · Demo scheduled</span>}
+          href={lead.opportunity ? '/opportunities' : undefined}
+        />
+        <Row
+          label="Customer (Accounts & Contacts)"
+          value={account ? `${account.accountName}${account.lifecycleStage ? ` · ${enumLabel(account.lifecycleStage)}` : ''}` : <span className="font-normal text-muted-foreground">Not yet — created at 5 · Signed up / trial</span>}
+          href={account ? '/accounts' : undefined}
+        />
+        <Row
+          label="Onboarding"
+          value={onboarding ? `${enumLabel(onboarding.status)} · ${onboarding.progressPercentage}%` : <span className="font-normal text-muted-foreground">Starts at 5 · Signed up / trial</span>}
+          href={onboarding ? '/onboarding' : undefined}
+          hint={onboarding ? 'Completes automatically at 6 · Activated' : undefined}
+        />
+        <Row
+          label="Support tickets"
+          value={account ? `${account._count?.tickets ?? 0} ticket${(account._count?.tickets ?? 0) === 1 ? '' : 's'}` : <span className="font-normal text-muted-foreground">Available once they are a customer</span>}
+          href={account && (account._count?.tickets ?? 0) > 0 ? '/tickets' : undefined}
+        />
+      </div>
+      {account && canCreateTicket && !ticketOpen && (
+        <Button size="sm" variant="outline" className="mt-2" onClick={() => setTicketOpen(true)}>
+          <Plus className="size-4" />
+          Open support ticket
+        </Button>
+      )}
+      {ticketOpen && (
+        <form onSubmit={(event) => void openTicket(event)} className="mt-2 space-y-2">
+          <Input aria-label="Ticket subject" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="What is the problem?" maxLength={200} autoFocus disabled={pending} />
+          <textarea
+            aria-label="Ticket details"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Details"
+            maxLength={10000}
+            className="min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            disabled={pending}
+          />
+          <div className="flex justify-end gap-2">
+            <Button type="button" size="sm" variant="ghost" onClick={() => setTicketOpen(false)} disabled={pending}>Cancel</Button>
+            <Button type="submit" size="sm" disabled={pending || !subject.trim() || !description.trim()}>{pending ? 'Opening…' : 'Open ticket'}</Button>
+          </div>
+        </form>
+      )}
+    </section>
   )
 }
 

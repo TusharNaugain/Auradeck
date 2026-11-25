@@ -51,7 +51,7 @@ import { leadCreateSchema, leadSource, preferredContactMethod } from '@/lib/vali
 import { toast } from 'sonner'
 import { createGoogleCalendarLink } from '@/lib/client/calendar-link'
 import { LeadsTable, type SortKey } from './leads-table'
-import { ExtraContacts, LeadKeyFields, LeadNameEditor, LeadStagePanel, SourceLockNote, StageGuide, stageColor, type ExtraContactView } from './lead-panels'
+import { ExtraContacts, LeadKeyFields, LeadLinkedRecords, LeadNameEditor, LeadStagePanel, SourceLockNote, StageGuide, stageColor, type ExtraContactView } from './lead-panels'
 import {
   DEAD_LEAD_STAGES,
   LEAD_STAGES,
@@ -145,9 +145,13 @@ type LeadDetails = LeadSummary & {
   consentSource?: string | null
   customFields?: Record<string, unknown> | null
   assignedTo?: { id: string; fullName: string; avatarUrl?: string | null } | null
+  convertedContactId?: string | null
+  opportunity?: { id: string; opportunityNumber: string; name: string; stage: string } | null
   convertedAccount?: {
     id: string
     accountName: string
+    lifecycleStage?: string | null
+    _count?: { tickets: number }
     paymentStatus: string | null
     mrr: string | number | null
     subscriptions: { id: string; status: string; startDate: string; renewalDate: string | null; amount: string | number; currency: string }[]
@@ -322,8 +326,10 @@ function LeadsPageInner() {
       if (!window.confirm(`Mark ${lead?.fullName ?? 'this lead'} as dead? It leaves the board and the dashboard and moves to the "Dead" stage. The change is recorded in its activity history.`)) return
     }
     try {
-      await api.patch(`/api/leads/${leadId}`, { lifecycleStage: lifecycleStage.toLowerCase() })
-      toast.success(DEMO_MODE ? 'Lead stage saved in this browser' : 'Lead stage updated')
+      const saved = await api.patch<{ flowNotes?: string[] }>(`/api/leads/${leadId}`, { lifecycleStage: lifecycleStage.toLowerCase() })
+      const notes = saved?.flowNotes ?? []
+      toast.success(DEMO_MODE ? 'Lead stage saved in this browser' : 'Lead stage updated', notes.length ? { description: notes.join(' · ') } : undefined)
+      if (notes.length) invalidate(['opportunities'], ['accounts'], ['contacts'], ['onboarding'])
       invalidate(['leads'])
       invalidate(['lead', leadId])
       invalidate(['reports', 'overview'])
@@ -902,6 +908,8 @@ function LeadDetailsSheet({
               <LeadStagePanel stage={lead.lifecycleStage} canUpdate={canUpdate} onStageChange={onStageChange} />
 
               <LeadKeyFields lead={lead} canUpdate={canUpdate} owner={<LeadOwner leadId={lead.id} owner={lead.assignedTo ?? null} />} />
+
+              <LeadLinkedRecords lead={lead} />
 
               <section className="rounded-xl border border-border/70 p-4">
                 <SectionTitle icon={CalendarClock} title="Next follow-up date" />

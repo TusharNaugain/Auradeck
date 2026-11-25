@@ -4,10 +4,8 @@
  */
 
 import { PIPELINE_STAGES } from '@/lib/leads/stages'
+import { createCustomerFromLead, createLeadOpportunity } from '@/lib/leads/stage-flow'
 import { db } from '@/lib/db'
-import { computeWeightedAmount, DEFAULT_STAGE_PROBABILITY } from '@/lib/validations'
-import { Prisma, type OpportunityStage } from '@prisma/client'
-import { nextCounterValueInTx } from '@/lib/services/numbering'
 
 export interface DedupeResult {
   isDuplicate: boolean
@@ -135,96 +133,31 @@ export async function convertLead(input: ConversionInput): Promise<ConversionRes
         throw new Error('LEAD_ALREADY_CONVERTED')
       }
 
-      const fullName = `${lead.firstName} ${lead.lastName}`
-      const accountName = input.accountOverrides?.accountName ?? lead.organisationName ?? fullName
-
-      // 1. Account for the practice
-      const accountCodeValue = await nextCounterValueInTx(input.organisationId, 'account', tx)
-      const account = await tx.account.create({
-        data: {
-          organisationId: input.organisationId,
-          accountName,
-          customerAccountCode: `ACC-${accountCodeValue.toString().padStart(6, '0')}`,
-          ownerUserId: input.accountOverrides?.ownerUserId ?? lead.assignedToUserId ?? input.actorUserId,
-          healthStatus: 'UNKNOWN',
-          tags: lead.tags ?? [],
-        },
+      // Same records the stage flow creates; reuses the lead's existing deal if it has one.
+      const { accountId, contactId, accountName } = await createCustomerFromLead(tx, lead, input.actorUserId, {
+        accountName: input.accountOverrides?.accountName,
+        ownerUserId: input.accountOverrides?.ownerUserId,
       })
-
-      // 2. Primary contact from lead details
-      const contact = await tx.contact.create({
-        data: {
-          organisationId: input.organisationId,
-          accountId: account.id,
-          firstName: lead.firstName,
-          lastName: lead.lastName,
-          fullName,
-          email: lead.email,
-          phoneCountryCode: lead.phoneCountryCode,
-          phoneNumber: lead.phoneNumber,
-          whatsappNumber: lead.whatsappNumber,
-          jobTitle: lead.jobTitle,
-          contactType: 'OWNER',
-          isPrimary: true,
-          isDecisionMaker: true,
-          consentStatus: lead.consentStatus,
-          tags: lead.tags ?? [],
-        },
-      })
-
-      // 3. Optional new-business opportunity
-      let opportunityId: string | undefined
-      if (input.createOpportunity !== false) {
-        const oppValue = await nextCounterValueInTx(input.organisationId, 'opportunity', tx)
-        const stage: OpportunityStage = 'DISCOVERY'
-        const probability = DEFAULT_STAGE_PROBABILITY[stage.toLowerCase()] ?? 10
-        const amount = input.opportunity?.amount ?? 0
-        opportunityId = (
-          await tx.opportunity.create({
-            data: {
-              organisationId: input.organisationId,
-              opportunityNumber: `OPP-${oppValue.toString().padStart(6, '0')}`,
-              accountId: account.id,
-              primaryContactId: contact.id,
-              name: input.opportunity?.name ?? `${accountName} — AuraDeck CRM`,
-              type: 'NEW_BUSINESS',
-              stage,
-              amount: new Prisma.Decimal(amount),
-              currency: 'INR',
-              probability,
-              weightedAmount: new Prisma.Decimal(computeWeightedAmount(amount, probability)),
-              expectedCloseDate: input.opportunity?.expectedCloseDate ?? undefined,
-              billingFrequency: input.opportunity?.billingFrequency ?? 'monthly',
-              ownerUserId: input.opportunity?.ownerUserId ?? lead.assignedToUserId ?? input.actorUserId,
-              forecastCategory: 'PIPELINE',
-              source: lead.leadSource,
-            },
-          })
-        ).id
-
-        await tx.opportunityStageHistory.create({
-          data: {
-            opportunityId,
-            fromStage: null,
-            toStage: 'DISCOVERY',
-            changedByUserId: input.actorUserId,
-            reason: `Converted from lead ${lead.leadNumber}`,
-          },
+      let opportunityId: string | undefined = lead.opportunityId ?? undefined
+      if (!opportunityId && input.createOpportunity !== false) {
+        opportunityId = await createLeadOpportunity(tx, { ...lead, convertedAccountId: accountId, convertedContactId: contactId }, input.actorUserId, {
+          stage: 'DISCOVERY',
+          accountId,
+          contactId,
+          name: input.opportunity?.name ?? `${accountName} — AuraDeck CRM`,
+          amount: input.opportunity?.amount,
+          expectedCloseDate: input.opportunity?.expectedCloseDate ?? undefined,
+          billingFrequency: input.opportunity?.billingFrequency,
+          ownerUserId: input.opportunity?.ownerUserId,
         })
       }
 
-      // 4. Mark lead converted (preserving complete history)
-      await tx.lead.update({
-        where: { id: lead.id },
-        data: {
-          // Conversion = account created → "Signed up / trial", unless the lead is already further along.
-          ...((PIPELINE_STAGES as readonly string[]).includes(lead.lifecycleStage) ? { lifecycleStage: 'SIGNED_UP' as const } : {}),
-          convertedAccountId: account.id,
-          convertedContactId: contact.id,
-        },
-      })
+      // Conversion = account created → "Signed up / trial", unless the lead is already further along.
+      if ((PIPELINE_STAGES as readonly string[]).includes(lead.lifecycleStage)) {
+        await tx.lead.update({ where: { id: lead.id }, data: { lifecycleStage: 'SIGNED_UP' } })
+      }
 
-      return { accountId: account.id, contactId: contact.id, opportunityId }
+      return { accountId, contactId, opportunityId }
     },
     { isolationLevel: 'Serializable', timeout: 15_000 }
   )

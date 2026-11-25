@@ -724,6 +724,8 @@ model Lead {
   /// Contacts the team added on top of the source email/phone: [{ id, type, value, label?, addedAt, addedBy }]
   extraContacts           Json               @default("[]")
   convertedAccountId      String?
+  /// Deal created when the lead reached "Demo scheduled" (see src/lib/leads/stage-flow.ts)
+  opportunityId           String?
   convertedContactId      String?
   lostReason              String?
   disqualificationReason  String?
@@ -743,6 +745,7 @@ model Lead {
   campaign                Campaign?          @relation(fields: [campaignId], references: [id])
   activities              Activity[]
   convertedAccount        Account?           @relation(fields: [convertedAccountId], references: [id])
+  opportunity             Opportunity?       @relation("LeadOpportunity", fields: [opportunityId], references: [id], onDelete: SetNull)
 
   @@unique([organisationId, leadNumber])
   @@index([organisationId])
@@ -751,6 +754,7 @@ model Lead {
   @@index([assignedToUserId])
   @@index([nextFollowUpAt])
   @@index([createdAt])
+  @@index([opportunityId])
   @@map("leads")
 }
 
@@ -841,6 +845,7 @@ model Opportunity {
   plan                Plan?            @relation(fields: [planId], references: [id])
   stageHistory        OpportunityStageHistory[]
   activities          Activity[]
+  leads               Lead[]           @relation("LeadOpportunity")
 
   @@unique([organisationId, opportunityNumber])
   @@index([organisationId])

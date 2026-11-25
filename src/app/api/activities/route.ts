@@ -50,10 +50,27 @@ export const GET = routeHandler(async (req: NextRequest) => {
     ],
   }
 
+  // "Who did it" = the member who logged it (owner) or created it.
+  const doneByFilter = query.doneByUserId
+    ? { OR: [{ ownerUserId: query.doneByUserId }, { createdBy: query.doneByUserId }] }
+    : null
+  const searchFilter = query.search
+    ? {
+        OR: [
+          { subject: { contains: query.search, mode: 'insensitive' } },
+          { description: { contains: query.search, mode: 'insensitive' } },
+          { outcome: { contains: query.search, mode: 'insensitive' } },
+          { relatedLead: { fullName: { contains: query.search, mode: 'insensitive' } } },
+        ],
+      }
+    : null
+
   const where = {
     ...baseWhere,
     ...(assignmentFilter ?? {}),
-    AND: [visibilityFilter],
+    ...(query.leadsOnly === 'true' ? { relatedLeadId: { not: null } } : {}),
+    ...(query.createdAfter ? { createdAt: { gte: new Date(query.createdAfter) } } : {}),
+    AND: [visibilityFilter, ...(doneByFilter ? [doneByFilter] : []), ...(searchFilter ? [searchFilter] : [])],
   }
 
   const [items, total] = await Promise.all([
@@ -65,6 +82,8 @@ export const GET = routeHandler(async (req: NextRequest) => {
       select: {
         id: true, activityType: true, subject: true, status: true, visibility: true,
         dueAt: true, completedAt: true, priority: true, createdAt: true,
+        description: true, outcome: true, externalReference: true,
+        relatedLead: { select: { id: true, fullName: true, leadNumber: true, lifecycleStage: true } },
         owner: { select: { id: true, fullName: true } },
         assignedTo: { select: { id: true, fullName: true } },
         relatedLeadId: true, relatedAccountId: true, relatedContactId: true,

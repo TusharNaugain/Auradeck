@@ -16,6 +16,7 @@ import {
   type SyncRecord,
 } from './engine'
 import type { LeadSnapshot, SyncStore } from './lead-sync'
+import { applyStageFlow } from '@/lib/leads/stage-flow'
 
 const ENTITY = 'lead'
 const toJson = (value: unknown) => value as Prisma.InputJsonValue
@@ -182,6 +183,8 @@ export function createPrismaSyncStore(): SyncStore {
               fullName: [record.firstName, record.lastName].filter(Boolean).join(' '),
             } as Prisma.LeadUncheckedCreateInput,
           })
+          // A row that arrives already past New (e.g. "Demo scheduled") gets its deal / account too.
+          await applyStageFlow(tx, { organisationId: org, leadId: row.id, from: 'NEW', actorUserId: null })
           await tx.syncRecordState.create({
             data: { organisationId: org, entity: ENTITY, recordId: row.id, externalRef, baseJson: toJson(record) },
           })
@@ -237,6 +240,11 @@ export function createPrismaSyncStore(): SyncStore {
           data: data as Prisma.LeadUncheckedUpdateManyInput,
         })
         if (result.count !== 1) return false
+
+        // A stage set from the sheet drives the same deal / account / onboarding flow as the CRM.
+        if (patch.lifecycleStage && patch.lifecycleStage.toUpperCase() !== current.lifecycleStage) {
+          await applyStageFlow(tx, { organisationId: org, leadId, from: current.lifecycleStage, actorUserId: null })
+        }
 
         await tx.syncRecordState.upsert({
           where: { organisationId_entity_recordId: { organisationId: org, entity: ENTITY, recordId: leadId } },

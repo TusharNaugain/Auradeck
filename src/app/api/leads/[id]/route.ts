@@ -16,6 +16,7 @@ import { resolveLeadScope } from '@/lib/reports/scope'
 import { assertActiveMember, assertCanAssign } from '@/lib/services/assignment'
 import { v4 as uuidv4 } from 'uuid'
 import { DEAD_LEAD_STAGES, stageLabel } from '@/lib/leads/stages'
+import { applyStageFlow } from '@/lib/leads/stage-flow'
 import { addExtraContact, lockedSourceFields, parseExtraContacts, removeExtraContact } from '@/lib/leads/extra-contacts'
 
 type RouteContext = { params: Promise<{ id: string }> }
@@ -32,10 +33,13 @@ export const GET = routeHandler(async (req: NextRequest, context: RouteContext) 
     include: {
       assignedTo: { select: { id: true, fullName: true, avatarUrl: true } },
       campaign: { select: { id: true, name: true } },
+      opportunity: { select: { id: true, opportunityNumber: true, name: true, stage: true } },
       convertedAccount: {
         select: {
           id: true,
           accountName: true,
+          lifecycleStage: true,
+          _count: { select: { tickets: true } },
           paymentStatus: true,
           mrr: true,
           subscriptions: {
@@ -199,15 +203,18 @@ export const PATCH = routeHandler(async (req: NextRequest, context: RouteContext
         ...(body.isPriority !== undefined ? { isPriority: body.isPriority } : {}),
       },
     })
+    let flowNotes: string[] = []
     if (lead.lifecycleStage !== updatedLead.lifecycleStage) {
       const dead = (DEAD_LEAD_STAGES as readonly string[]).includes(updatedLead.lifecycleStage)
+      // Deal, customer account, onboarding follow the stage (see stage-flow.ts).
+      flowNotes = await applyStageFlow(tx, { organisationId, leadId: lead.id, from: lead.lifecycleStage, actorUserId: user.id })
       // Every stage move is written to the lead's history so the pipeline is auditable.
       await tx.activity.create({
         data: {
           organisationId,
           activityType: 'NOTE',
           subject: dead ? 'Lead marked as dead' : `Stage: ${stageLabel(updatedLead.lifecycleStage)}`,
-          description: `Lead moved from ${stageLabel(lead.lifecycleStage)} to ${stageLabel(updatedLead.lifecycleStage)}.`,
+          description: `Lead moved from ${stageLabel(lead.lifecycleStage)} to ${stageLabel(updatedLead.lifecycleStage)}.${flowNotes.length ? ` ${flowNotes.join('. ')}.` : ''}`,
           outcome: dead ? 'Lead closed as dead' : null,
           status: 'COMPLETED',
           ownerUserId: user.id,
@@ -218,8 +225,8 @@ export const PATCH = routeHandler(async (req: NextRequest, context: RouteContext
         },
       })
     }
-    return updatedLead
-  })
+    return { ...updatedLead, flowNotes }
+  }, { timeout: 15_000 })
 
   await createAuditLog({
     organisationId,
@@ -233,6 +240,7 @@ export const PATCH = routeHandler(async (req: NextRequest, context: RouteContext
       isPriority: updated.isPriority,
       ...(nameChanged ? { fullName: updated.fullName } : {}),
       ...(extraContacts ? { extraContacts: extraContacts.length } : {}),
+      ...(updated.flowNotes.length ? { stageFlow: updated.flowNotes } : {}),
     },
     ipHash,
     userAgentHash,

@@ -11,6 +11,8 @@ vi.mock('@/lib/db', () => ({ db }))
 vi.mock('@/lib/audit', () => ({ createAuditLog: vi.fn() }))
 vi.mock('@/lib/reports/scope', () => ({ resolveLeadScope: vi.fn(async () => ({ assignedToUserId: 'u1' })) }))
 vi.mock('@/lib/services/assignment', () => ({ assertActiveMember: vi.fn(), assertCanAssign: vi.fn() }))
+const applyStageFlow = vi.hoisted(() => vi.fn(async () => ['Deal created in Opportunities']))
+vi.mock('@/lib/leads/stage-flow', () => ({ applyStageFlow }))
 vi.mock('@/lib/utils/api-helpers', async (orig) => ({ ...(await orig<object>()), guardedRoute }))
 
 import { PATCH } from '@/app/api/leads/[id]/route'
@@ -71,5 +73,16 @@ describe('PATCH /api/leads/[id]', () => {
     expect(updateData()).toMatchObject({ lifecycleStage: 'CONTACTED', nextAction: 'Send demo invite' })
     expect(updateData().firstContactedAt).toBeInstanceOf(Date)
     expect(tx.activity.create.mock.calls[0][0].data).toMatchObject({ subject: 'Stage: Contacted', relatedLeadId: 'lead1' })
+  })
+
+  it('runs the stage flow in the same transaction and records what it did', async () => {
+    await patch({ lifecycleStage: 'demo_scheduled' })
+    expect(applyStageFlow).toHaveBeenCalledWith(tx, { organisationId: 'org', leadId: 'lead1', from: 'NEW', actorUserId: 'u1' })
+    expect(tx.activity.create.mock.calls[0][0].data.description).toContain('Deal created in Opportunities')
+  })
+
+  it('does not run the stage flow when the stage is unchanged', async () => {
+    await patch({ nextAction: 'Call back' })
+    expect(applyStageFlow).not.toHaveBeenCalled()
   })
 })
