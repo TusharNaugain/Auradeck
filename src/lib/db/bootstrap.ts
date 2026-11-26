@@ -14,7 +14,7 @@
  * (default `sales_rep`). Members are only ever ADDED: an existing membership, its role
  * and its status are never changed, so later edits in Settings -> Members are preserved.
  */
-const INTERNAL_ORG_SLUG = 'auradesk-internal'
+const INTERNAL_ORG_SLUG = 'auradeck-internal'
 const ADMIN_ROLE_SLUG = 'super_admin'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -61,9 +61,9 @@ async function main() {
     }
     const org = existingOrg ?? await db.organisation.create({
       data: {
-        type: 'AURADESK_INTERNAL',
-        legalName: 'Auradesk',
-        displayName: 'Auradesk',
+        type: 'AURADECK_INTERNAL',
+        legalName: 'Auradeck',
+        displayName: 'Auradeck',
         slug: INTERNAL_ORG_SLUG,
         primaryEmail: adminEmail,
         status: 'ACTIVE',
@@ -79,7 +79,7 @@ async function main() {
       const existingUser = await db.user.findUnique({ where: { email: adminEmail } })
       const user = existingUser ?? await db.user.create({
         data: {
-          fullName: 'Auradesk Admin', firstName: 'Auradesk', lastName: 'Admin', email: adminEmail,
+          fullName: 'Auradeck Admin', firstName: 'Auradeck', lastName: 'Admin', email: adminEmail,
           status: 'ACTIVE', emailVerifiedAt: new Date(),
         },
       })

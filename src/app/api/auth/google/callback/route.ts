@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
         })
       : []
     const internalMembership = memberships.find(
-      membership => membership.organisation.type === 'AURADESK_INTERNAL' && membership.organisation.status === 'ACTIVE'
+      membership => membership.organisation.type === 'AURADECK_INTERNAL' && membership.organisation.status === 'ACTIVE'
     )
 
     if (!user || !internalMembership) {

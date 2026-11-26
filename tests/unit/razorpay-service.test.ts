@@ -83,7 +83,7 @@ describe('startCheckout', () => {
     db.practiceSubscription.findUnique.mockResolvedValueOnce(trialRow({ status: 'ACTIVE' }))
     await expect(startCheckout('org_1', { email: 'a@x.test' }, { planId: plan.id, interval: 'monthly' }, { client: fakeClient() })).rejects.toThrow('already has an active plan')
 
-    db.organisation.findUnique.mockResolvedValueOnce({ id: 'org_1', type: 'AURADESK_INTERNAL', displayName: 'x', primaryEmail: 'x', primaryPhone: null })
+    db.organisation.findUnique.mockResolvedValueOnce({ id: 'org_1', type: 'AURADECK_INTERNAL', displayName: 'x', primaryEmail: 'x', primaryPhone: null })
     await expect(startCheckout('org_1', { email: 'a@x.test' }, { planId: plan.id, interval: 'monthly' }, { client: fakeClient() })).rejects.toThrow('only for therapist practices')
 
     vi.stubEnv('BILLING_RAZORPAY_ENABLED', 'false')
@@ -149,7 +149,7 @@ describe('billingAccessBlocked', () => {
     expect(await billingAccessBlocked('org_1', NOW)).toBe(false)
     expect(db.practiceSubscription.create).toHaveBeenCalledWith({ data: expect.objectContaining({ organisationId: 'org_1', status: 'TRIAL', trialEndsAt: new Date(NOW.getTime() + 14 * 86400000) }) })
 
-    db.organisation.findUnique.mockResolvedValueOnce({ type: 'AURADESK_INTERNAL', practiceSubscription: null })
+    db.organisation.findUnique.mockResolvedValueOnce({ type: 'AURADECK_INTERNAL', practiceSubscription: null })
     expect(await billingAccessBlocked('org_1', NOW)).toBe(false)
 
     vi.stubEnv('BILLING_RAZORPAY_ENABLED', 'false')

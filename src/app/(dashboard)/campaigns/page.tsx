@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -92,7 +93,7 @@ function LeadPicker({ picked, onChange }: { picked: PickableLead[]; onChange: (l
   }
 
   return (
-    <div className="space-y-2 rounded-md border border-muted-foreground/30 p-3">
+    <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
       <Input
         className={FIELD}
         value={input}
@@ -113,7 +114,7 @@ function LeadPicker({ picked, onChange }: { picked: PickableLead[]; onChange: (l
           <button type="button" className="text-xs text-muted-foreground underline" onClick={() => onChange([])}>Clear all</button>
         </div>
       )}
-      <div className="max-h-64 overflow-y-auto rounded-md border border-border/60">
+      <div className="scroll-thin max-h-64 overflow-y-auto rounded-md border bg-background">
         {results.isLoading ? (
           <Skeleton className="h-24 w-full" />
         ) : results.isError ? (
@@ -122,18 +123,31 @@ function LeadPicker({ picked, onChange }: { picked: PickableLead[]; onChange: (l
           <p className="p-3 text-sm text-muted-foreground">{search ? 'No matching leads you can email.' : 'No leads you can email yet.'}</p>
         ) : (
           <ul>
-            {results.data.map((lead) => (
-              <li key={lead.id} className="border-b border-border/60 last:border-0">
-                <label className="flex cursor-pointer items-center gap-3 px-3 py-2 text-sm hover:bg-muted/40">
-                  <input type="checkbox" className="accent-primary" checked={pickedIds.has(lead.id)} onChange={() => toggle(lead)} />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-medium">{lead.name || lead.email}</span>
-                    <span className="block truncate text-xs text-muted-foreground">{lead.email}</span>
-                  </span>
-                  <span className="shrink-0 text-xs text-muted-foreground">{stageLabel(lead.lifecycleStage)}</span>
-                </label>
-              </li>
-            ))}
+            {results.data.map((lead) => {
+              const checked = pickedIds.has(lead.id)
+              return (
+                <li key={lead.id} className="border-b last:border-0">
+                  <label
+                    className={cn(
+                      'flex cursor-pointer items-center gap-3 px-3 py-2.5 text-sm transition-colors hover:bg-muted/50',
+                      checked && 'bg-primary/10 hover:bg-primary/15'
+                    )}
+                  >
+                    <Checkbox
+                      checked={checked}
+                      onCheckedChange={() => toggle(lead)}
+                      aria-label={`Pick ${lead.name || lead.email}`}
+                      className="border-muted-foreground/50 bg-background"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-medium">{lead.name || lead.email}</span>
+                      <span className="block truncate text-xs text-muted-foreground">{lead.email}</span>
+                    </span>
+                    <span className="shrink-0 rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground">{stageLabel(lead.lifecycleStage)}</span>
+                  </label>
+                </li>
+              )
+            })}
           </ul>
         )}
       </div>
@@ -286,14 +300,24 @@ function Composer() {
                   <label
                     key={id}
                     className={cn(
-                      'flex min-w-0 cursor-pointer items-center gap-2 rounded-md border border-muted-foreground/40 p-3 text-sm',
-                      'has-[:checked]:border-primary has-[:checked]:bg-primary/10 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring'
+                      'group flex min-w-0 cursor-pointer items-center gap-3 rounded-lg border bg-muted/30 px-3.5 py-3 text-sm transition-colors hover:bg-muted/60',
+                      'has-[:checked]:border-primary/70 has-[:checked]:bg-primary/10 has-[:checked]:font-medium has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring'
                     )}
                   >
-                    <input type="radio" name="audience" className="accent-primary" checked={audience === id} disabled={disabled} onChange={() => setAudience(id)} />
+                    <input
+                      type="radio"
+                      name="audience"
+                      className="size-4 shrink-0 appearance-none rounded-full border-2 border-muted-foreground/50 bg-background transition-all checked:border-[5px] checked:border-primary focus-visible:outline-none"
+                      checked={audience === id}
+                      disabled={disabled}
+                      onChange={() => setAudience(id)}
+                    />
                     <span className="min-w-0 flex-1 truncate">{label}</span>
-                    {n !== undefined && <span className="shrink-0 text-muted-foreground">({n})</span>}
-                    {id === 'selected' && picked.length > 0 && <span className="shrink-0 text-muted-foreground">({picked.length})</span>}
+                    {(n !== undefined || (id === 'selected' && picked.length > 0)) && (
+                      <span className="tabular shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground group-has-[:checked]:bg-primary/20 group-has-[:checked]:text-primary">
+                        {n ?? picked.length}
+                      </span>
+                    )}
                   </label>
                 )
               })}

@@ -31,6 +31,7 @@
 }
 
 .dark {
+  color-scheme: dark;
   --background: 224 71% 4%;
   --foreground: 210 20% 98%;
   --card: 226 71% 6%;
@@ -135,5 +136,11 @@
 @layer utilities {
   .tabular {
     font-variant-numeric: tabular-nums;
+  }
+
+  /* Slim scrollbar that follows the theme instead of the OS default grey bar */
+  .scroll-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.35) transparent;
   }
 }

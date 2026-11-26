@@ -13,21 +13,21 @@ export const ROLE_DEFINITIONS: Array<{
   slug: string
   name: string
   description: string
-  organisationType: 'AURADESK_INTERNAL' | 'CUSTOMER_PRACTICE' | null
+  organisationType: 'AURADECK_INTERNAL' | 'CUSTOMER_PRACTICE' | null
 }> = [
   { slug: 'super_admin', name: 'Super admin', description: 'Full platform access', organisationType: null },
-  { slug: 'admin', name: 'Admin', description: 'Runs the workspace and the team', organisationType: 'AURADESK_INTERNAL' },
-  { slug: 'marketing', name: 'Marketing', description: 'Lead generation, distribution and campaigns', organisationType: 'AURADESK_INTERNAL' },
-  { slug: 'executive', name: 'Executive / Management', description: 'Dashboards, reports, and portfolio visibility', organisationType: 'AURADESK_INTERNAL' },
-  { slug: 'sales_head', name: 'Sales Manager', description: 'Owns the sales pipeline and hands out leads', organisationType: 'AURADESK_INTERNAL' },
-  { slug: 'sales_rep', name: 'Sales', description: 'Works assigned leads and deals', organisationType: 'AURADESK_INTERNAL' },
-  { slug: 'csm_head', name: 'CS Manager', description: 'Customer success: onboarding, health, renewals', organisationType: 'AURADESK_INTERNAL' },
-  { slug: 'csm', name: 'CSM', description: 'Assigned customers, onboarding, success plans', organisationType: 'AURADESK_INTERNAL' },
-  { slug: 'support_admin', name: 'Support Admin', description: 'All tickets, SLA, escalation management', organisationType: 'AURADESK_INTERNAL' },
-  { slug: 'support_agent', name: 'Support Agent', description: 'Assigned tickets and customer communication', organisationType: 'AURADESK_INTERNAL' },
-  { slug: 'finance_admin', name: 'Finance Admin', description: 'Subscriptions, invoices, payments, reports', organisationType: 'AURADESK_INTERNAL' },
-  { slug: 'operations_admin', name: 'Operations Admin', description: 'Practices, users, onboarding, settings', organisationType: 'AURADESK_INTERNAL' },
-  { slug: 'analyst', name: 'Read-only Analyst', description: 'Approved dashboards and reports only', organisationType: 'AURADESK_INTERNAL' },
+  { slug: 'admin', name: 'Admin', description: 'Runs the workspace and the team', organisationType: 'AURADECK_INTERNAL' },
+  { slug: 'marketing', name: 'Marketing', description: 'Lead generation, distribution and campaigns', organisationType: 'AURADECK_INTERNAL' },
+  { slug: 'executive', name: 'Executive / Management', description: 'Dashboards, reports, and portfolio visibility', organisationType: 'AURADECK_INTERNAL' },
+  { slug: 'sales_head', name: 'Sales Manager', description: 'Owns the sales pipeline and hands out leads', organisationType: 'AURADECK_INTERNAL' },
+  { slug: 'sales_rep', name: 'Sales', description: 'Works assigned leads and deals', organisationType: 'AURADECK_INTERNAL' },
+  { slug: 'csm_head', name: 'CS Manager', description: 'Customer success: onboarding, health, renewals', organisationType: 'AURADECK_INTERNAL' },
+  { slug: 'csm', name: 'CSM', description: 'Assigned customers, onboarding, success plans', organisationType: 'AURADECK_INTERNAL' },
+  { slug: 'support_admin', name: 'Support Admin', description: 'All tickets, SLA, escalation management', organisationType: 'AURADECK_INTERNAL' },
+  { slug: 'support_agent', name: 'Support Agent', description: 'Assigned tickets and customer communication', organisationType: 'AURADECK_INTERNAL' },
+  { slug: 'finance_admin', name: 'Finance Admin', description: 'Subscriptions, invoices, payments, reports', organisationType: 'AURADECK_INTERNAL' },
+  { slug: 'operations_admin', name: 'Operations Admin', description: 'Practices, users, onboarding, settings', organisationType: 'AURADECK_INTERNAL' },
+  { slug: 'analyst', name: 'Read-only Analyst', description: 'Approved dashboards and reports only', organisationType: 'AURADECK_INTERNAL' },
   { slug: 'practice_owner', name: 'Practice Owner', description: 'Full access to their practice', organisationType: 'CUSTOMER_PRACTICE' },
   { slug: 'practice_admin', name: 'Practice Admin', description: 'Practice setup, staff, schedules', organisationType: 'CUSTOMER_PRACTICE' },
   { slug: 'therapist', name: 'Therapist / Practitioner', description: 'Assigned clients, appointments, clinical notes', organisationType: 'CUSTOMER_PRACTICE' },

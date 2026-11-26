@@ -182,7 +182,7 @@ export const GET = routeHandler(async (req: NextRequest) => {
 
     // 4. Management dashboard (internal only)
     (async () => {
-      if (org?.type !== 'AURADESK_INTERNAL' || !canViewBilling) return null
+      if (org?.type !== 'AURADECK_INTERNAL' || !canViewBilling) return null
       const [currentMrr, customersByStatus, openTicketCount, openTickets] = await Promise.all([
         db.subscription.aggregate({
           where: { status: 'ACTIVE', organisationId },

@@ -27,7 +27,7 @@ export const GET = routeHandler(async (req: NextRequest) => {
   const isInternal = (await db.organisation.findUnique({
     where: { id: organisationId },
     select: { type: true },
-  }))?.type === 'AURADESK_INTERNAL'
+  }))?.type === 'AURADECK_INTERNAL'
 
   const where: Prisma.SubscriptionWhereInput = {
     AND: [

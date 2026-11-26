@@ -14,7 +14,7 @@ export const GET = routeHandler(async (req: NextRequest) => {
     where: { id: organisationId },
     select: { type: true },
   })
-  if (currentOrganisation?.type !== 'AURADESK_INTERNAL') {
+  if (currentOrganisation?.type !== 'AURADECK_INTERNAL') {
     return NextResponse.json(
       { success: false, error: 'This report is only available to AuraDeck internal workspaces', code: 'PERMISSION_DENIED', requestId: uuidv4() },
       { status: 403 }

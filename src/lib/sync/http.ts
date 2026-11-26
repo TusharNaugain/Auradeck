@@ -28,7 +28,7 @@ async function resolveOrganisationId(): Promise<string | null> {
     console.warn('[sync] SYNC_ORGANISATION_ID does not exist in this database; falling back to the internal organisation')
   }
   const org = await db.organisation.findFirst({
-    where: { type: 'AURADESK_INTERNAL', status: 'ACTIVE' },
+    where: { type: 'AURADECK_INTERNAL', status: 'ACTIVE' },
     orderBy: { createdAt: 'asc' },
     select: { id: true },
   })

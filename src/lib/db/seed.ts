@@ -17,7 +17,7 @@ const ENV_PATH = path.resolve(process.cwd(), '.env')
 if (existsSync(ENV_PATH)) process.loadEnvFile(ENV_PATH)
 
 const REQUIRED_DB = 'crm_staging'
-const INTERNAL_ORG_SLUG = 'auradesk-internal'
+const INTERNAL_ORG_SLUG = 'auradeck-internal'
 const ADMIN_ROLE_SLUG = 'super_admin'
 
 function assertStaging(): void {
@@ -80,9 +80,9 @@ async function main() {
     const existingOrg = await db.organisation.findUnique({ where: { slug: INTERNAL_ORG_SLUG } })
     const org = existingOrg ?? await db.organisation.create({
       data: {
-        type: 'AURADESK_INTERNAL',
-        legalName: 'Auradesk',
-        displayName: 'Auradesk',
+        type: 'AURADECK_INTERNAL',
+        legalName: 'Auradeck',
+        displayName: 'Auradeck',
         slug: INTERNAL_ORG_SLUG,
         primaryEmail: adminEmail,
         status: 'ACTIVE',
@@ -103,7 +103,7 @@ async function main() {
       const passwordHash = await hashPassword(password)
       const created = await db.user.create({
         data: {
-          fullName: 'Auradesk Admin', firstName: 'Auradesk', lastName: 'Admin', email: adminEmail,
+          fullName: 'Auradeck Admin', firstName: 'Auradeck', lastName: 'Admin', email: adminEmail,
           status: 'ACTIVE', emailVerifiedAt: new Date(),
           credentials: { create: { passwordHash } },
         },

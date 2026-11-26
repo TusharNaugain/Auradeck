@@ -23,7 +23,7 @@ export const GET = routeHandler(async (req: NextRequest) => {
   const query = invoiceListSchema.parse(Object.fromEntries(searchParams))
 
   const org = await db.organisation.findUnique({ where: { id: organisationId }, select: { type: true } })
-  const visibility = org?.type === 'AURADESK_INTERNAL' ? {} : { account: { organisationId } }
+  const visibility = org?.type === 'AURADECK_INTERNAL' ? {} : { account: { organisationId } }
 
   const where: Prisma.InvoiceWhereInput = {
     ...visibility,

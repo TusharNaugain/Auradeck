@@ -32,7 +32,7 @@ export const PATCH = routeHandler(async (req: NextRequest, context: RouteContext
   const subscription = await db.subscription.findFirst({
     where: {
       id,
-      ...(currentOrganisation?.type === 'AURADESK_INTERNAL'
+      ...(currentOrganisation?.type === 'AURADECK_INTERNAL'
         ? {}
         : { account: { organisationId } }),
     },

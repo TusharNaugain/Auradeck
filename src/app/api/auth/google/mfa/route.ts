@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
   if (
     !user || user.status !== 'ACTIVE' || !user.mfaEnabled ||
     !membership || membership.status !== 'ACTIVE' ||
-    membership.organisation.status !== 'ACTIVE' || membership.organisation.type !== 'AURADESK_INTERNAL' ||
+    membership.organisation.status !== 'ACTIVE' || membership.organisation.type !== 'AURADECK_INTERNAL' ||
     !secret || !(parsed.data.mfaToken
       ? verifyTotpToken(secret.secret, parsed.data.mfaToken)
       : await verifyAndConsumeRecoveryCode(userId, parsed.data.recoveryCode!))

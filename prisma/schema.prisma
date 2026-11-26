@@ -10,7 +10,7 @@ datasource db {
 
 // Enums
 enum OrganisationType {
-  AURADESK_INTERNAL
+  AURADECK_INTERNAL
   CUSTOMER_PRACTICE
 }
 
