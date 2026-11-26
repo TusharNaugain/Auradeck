@@ -21,12 +21,13 @@ describe('campaign template', () => {
     expect(html.match(/<a href="javascript/)).toBeNull()
   })
 
-  it('has no automatic greeting but keeps the sign-off and unsubscribe placeholder', () => {
+  it('is a plain mail: no greeting, logo or sign-off, only the unsubscribe placeholder', () => {
     const html = renderCampaignHtml({ message: 'hello' })
     expect(html).not.toMatch(/>Hi /)
     expect(html).not.toContain('first_name')
+    expect(html).not.toContain('<img')
+    expect(html).not.toContain('Team Auradeck')
     expect(html).toContain('href="{{{RESEND_UNSUBSCRIBE_URL}}}"')
-    expect(html).toContain('Team Auradeck')
     const text = renderCampaignText({ message: 'hello' })
     expect(text.startsWith('hello')).toBe(true)
     expect(text).toContain('{{{RESEND_UNSUBSCRIBE_URL}}}')
@@ -34,8 +35,8 @@ describe('campaign template', () => {
 
   it('turns [text](url) into a link that shows only the text', () => {
     const html = renderCampaignHtml({ message: 'Use [your invite](https://app.auradeck.in/i/abc?x=1&y=2) or [our page](www.linkedin.com/company/auradeck).' })
-    expect(html).toContain('<a href="https://app.auradeck.in/i/abc?x=1&amp;y=2" style="color:#4f46e5;text-decoration:underline;">your invite</a>')
-    expect(html).toContain('<a href="https://www.linkedin.com/company/auradeck" style="color:#4f46e5;text-decoration:underline;">our page</a>.')
+    expect(html).toContain('<a href="https://app.auradeck.in/i/abc?x=1&amp;y=2" style="color:#1a73e8;">your invite</a>')
+    expect(html).toContain('<a href="https://www.linkedin.com/company/auradeck" style="color:#1a73e8;">our page</a>.')
     expect(html).not.toContain('](')
   })
 
@@ -48,7 +49,7 @@ describe('campaign template', () => {
 
   it('links bare www addresses with https', () => {
     const html = renderCampaignHtml({ message: 'Visit www.auradeck.in.' })
-    expect(html).toContain('<a href="https://www.auradeck.in" style="color:#4f46e5;text-decoration:underline;">www.auradeck.in</a>.')
+    expect(html).toContain('<a href="https://www.auradeck.in" style="color:#1a73e8;">www.auradeck.in</a>.')
   })
 
   it('writes links as "text (url)" in the plain-text version', () => {
