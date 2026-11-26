@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { AlertTriangle, Loader2, Megaphone, Send, X } from 'lucide-react'
+import { AlertTriangle, Link2, Loader2, Megaphone, Send, X } from 'lucide-react'
 import { stageLabel } from '@/lib/leads/stages'
 import { toast } from 'sonner'
 import { useMutation, useQuery } from '@tanstack/react-query'
@@ -53,7 +53,21 @@ const STATUS: Record<Status, { label: string; variant: 'secondary' | 'warning' |
   failed: { label: 'Failed', variant: 'destructive' },
 }
 const FIELD = 'border-muted-foreground/40 bg-background'
-const SAMPLE_MESSAGE = 'Your message will appear here.\n\nWrite it on the left and this preview updates as you type.'
+/** Accepts "https://x", "www.x" or "x.com/..."; returns an http(s) URL safe for [text](url), or null. */
+function normaliseLinkUrl(raw: string): string | null {
+  const s = raw.trim()
+  if (!s || /\s/.test(s)) return null
+  const url = /^https?:\/\//i.test(s) ? s : `https://${s.replace(/^\/+/, '')}`
+  try {
+    const parsed = new URL(url)
+    if (!/^https?:$/.test(parsed.protocol) || !parsed.hostname.includes('.')) return null
+  } catch {
+    return null
+  }
+  return url.replace(/[()<>"']/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`)
+}
+
+const SAMPLE_MESSAGE ='Your message will appear here.\n\nWrite it on the left and this preview updates as you type.'
 const isActive = (s: Status) => s === 'queued' || s === 'syncing' || s === 'sending'
 const audienceLabel = (id: Audience) => (id === 'selected' ? 'Hand-picked leads' : AUDIENCES.find((a) => a.id === id)?.label ?? id)
 
@@ -180,6 +194,8 @@ function Composer() {
   const [audience, setAudience] = React.useState<Audience>('priority')
   const [subject, setSubject] = React.useState('')
   const [message, setMessage] = React.useState('')
+  const messageRef = React.useRef<HTMLTextAreaElement>(null)
+  const [linkDraft, setLinkDraft] = React.useState<{ text: string; url: string; start: number; end: number } | null>(null)
   const [confirming, setConfirming] = React.useState(false)
   const [notConfigured, setNotConfigured] = React.useState(false)
 
@@ -250,7 +266,7 @@ function Composer() {
   })
 
   return (
-    <div className="grid gap-5 lg:grid-cols-2">
+    <div className="grid gap-5 xl:grid-cols-2 xl:items-start">
       <Card>
         <CardContent className="space-y-7 pt-6">
           {notConfigured && (
@@ -262,7 +278,7 @@ function Composer() {
 
           <Step n={1} title="Who should get this email?">
             {counts.isError && <p className="text-sm text-destructive">Could not load audience sizes.</p>}
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {AUDIENCES.map(({ id, label }) => {
                 const n = id === 'selected' ? undefined : counts.data?.[id]
                 const disabled = id !== 'selected' && !n
@@ -270,14 +286,14 @@ function Composer() {
                   <label
                     key={id}
                     className={cn(
-                      'flex cursor-pointer items-center gap-2 rounded-md border border-muted-foreground/40 p-3 text-sm',
+                      'flex min-w-0 cursor-pointer items-center gap-2 rounded-md border border-muted-foreground/40 p-3 text-sm',
                       'has-[:checked]:border-primary has-[:checked]:bg-primary/10 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring'
                     )}
                   >
                     <input type="radio" name="audience" className="accent-primary" checked={audience === id} disabled={disabled} onChange={() => setAudience(id)} />
-                    {label}
-                    {n !== undefined && <span className="text-muted-foreground">({n})</span>}
-                    {id === 'selected' && picked.length > 0 && <span className="text-muted-foreground">({picked.length})</span>}
+                    <span className="min-w-0 flex-1 truncate">{label}</span>
+                    {n !== undefined && <span className="shrink-0 text-muted-foreground">({n})</span>}
+                    {id === 'selected' && picked.length > 0 && <span className="shrink-0 text-muted-foreground">({picked.length})</span>}
                   </label>
                 )
               })}
@@ -309,11 +325,28 @@ function Composer() {
             </div>
 
             <div className="space-y-1.5">
-              <div className="flex justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <Label htmlFor="campaign-message">Message</Label>
-                <span className="text-xs text-muted-foreground">{message.length}/10000</span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const el = messageRef.current
+                      const start = el?.selectionStart ?? message.length
+                      const end = el?.selectionEnd ?? message.length
+                      setLinkDraft({ text: message.slice(start, end).trim(), url: '', start, end })
+                    }}
+                  >
+                    <Link2 />
+                    Add link
+                  </Button>
+                  <span className="text-xs text-muted-foreground">{message.length}/10000</span>
+                </div>
               </div>
               <Textarea
+                ref={messageRef}
                 id="campaign-message"
                 className={cn('min-h-56', FIELD)}
                 value={message}
@@ -323,7 +356,7 @@ function Composer() {
                 aria-describedby="campaign-hint"
               />
               <p id="campaign-hint" className="text-xs text-muted-foreground">
-                Each person gets &ldquo;Hi &lt;their first name&gt;,&rdquo; at the top and an Unsubscribe link at the bottom automatically. You do not need to type them.
+                Write your own greeting. To put a link behind words, select the words and click <span className="font-medium text-foreground">Add link</span>; it shows up as [words](link) here and as a clean clickable link in the email. An Unsubscribe link is added at the bottom automatically.
               </p>
             </div>
           </Step>
@@ -347,11 +380,11 @@ function Composer() {
         </CardContent>
       </Card>
 
-      <Card className="flex flex-col">
+      <Card className="flex flex-col xl:sticky xl:top-4">
         <CardHeader>
           <CardTitle className="text-sm font-semibold">Preview</CardTitle>
           <CardDescription>
-            This is how the email will look. &ldquo;Hi Alex&rdquo; is a sample name; each person sees their own.
+            This is how the email will look. Links here are not clickable; use Send test to me to try them.
           </CardDescription>
         </CardHeader>
         <CardContent className="min-h-96 flex-1">
@@ -364,6 +397,62 @@ function Composer() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={!!linkDraft} onOpenChange={(open) => !open && setLinkDraft(null)}>
+        <DialogContent>
+          <form
+            className="space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (!linkDraft) return
+              const url = normaliseLinkUrl(linkDraft.url)
+              const text = linkDraft.text.replace(/[[\]\n]/g, ' ').trim()
+              if (!url) return toast.error('Enter a full web address, for example https://linkedin.com/in/you')
+              if (!text) return toast.error('Enter the words people should click')
+              const md = `[${text}](${url})`
+              const next = message.slice(0, linkDraft.start) + md + message.slice(linkDraft.end)
+              if (next.length > 10000) return toast.error('The message would be longer than 10000 characters')
+              setMessage(next)
+              setLinkDraft(null)
+              const caret = linkDraft.start + md.length
+              requestAnimationFrame(() => {
+                messageRef.current?.focus()
+                messageRef.current?.setSelectionRange(caret, caret)
+              })
+            }}
+          >
+            <DialogHeader>
+              <DialogTitle>Add a link</DialogTitle>
+              <DialogDescription>People see only the words; the long address stays hidden behind them.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-1.5">
+              <Label htmlFor="link-text">Words to click</Label>
+              <Input
+                id="link-text"
+                className={FIELD}
+                value={linkDraft?.text ?? ''}
+                placeholder="e.g. Join with your personal invite"
+                onChange={(e) => setLinkDraft((d) => d && { ...d, text: e.target.value })}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="link-url">Link</Label>
+              <Input
+                id="link-url"
+                className={FIELD}
+                value={linkDraft?.url ?? ''}
+                placeholder="https://..."
+                autoFocus
+                onChange={(e) => setLinkDraft((d) => d && { ...d, url: e.target.value })}
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setLinkDraft(null)}>Cancel</Button>
+              <Button type="submit">Insert link</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={confirming} onOpenChange={setConfirming}>
         <DialogContent>

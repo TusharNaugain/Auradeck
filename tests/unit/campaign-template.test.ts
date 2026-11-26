@@ -21,17 +21,42 @@ describe('campaign template', () => {
     expect(html.match(/<a href="javascript/)).toBeNull()
   })
 
-  it('keeps the greeting, sign-off and unsubscribe placeholders', () => {
+  it('has no automatic greeting but keeps the sign-off and unsubscribe placeholder', () => {
     const html = renderCampaignHtml({ message: 'hello' })
-    expect(html).toContain('Hi {{{contact.first_name|there}}},')
+    expect(html).not.toMatch(/>Hi /)
+    expect(html).not.toContain('first_name')
     expect(html).toContain('href="{{{RESEND_UNSUBSCRIBE_URL}}}"')
     expect(html).toContain('Team Auradeck')
-    expect(renderCampaignText({ message: 'hello' })).toContain('{{{RESEND_UNSUBSCRIBE_URL}}}')
+    const text = renderCampaignText({ message: 'hello' })
+    expect(text.startsWith('hello')).toBe(true)
+    expect(text).toContain('{{{RESEND_UNSUBSCRIBE_URL}}}')
+  })
+
+  it('turns [text](url) into a link that shows only the text', () => {
+    const html = renderCampaignHtml({ message: 'Use [your invite](https://app.auradeck.in/i/abc?x=1&y=2) or [our page](www.linkedin.com/company/auradeck).' })
+    expect(html).toContain('<a href="https://app.auradeck.in/i/abc?x=1&amp;y=2" style="color:#4f46e5;text-decoration:underline;">your invite</a>')
+    expect(html).toContain('<a href="https://www.linkedin.com/company/auradeck" style="color:#4f46e5;text-decoration:underline;">our page</a>.')
+    expect(html).not.toContain('](')
+  })
+
+  it('escapes link text and never links other schemes in [text](url)', () => {
+    const html = renderCampaignHtml({ message: '[<b>x</b>](https://a.in) [bad](javascript:alert(1))' })
+    expect(html).toContain('>&lt;b&gt;x&lt;/b&gt;</a>')
+    expect(html).toContain('[bad](javascript:alert(1))')
+    expect(html.match(/href="javascript/)).toBeNull()
+  })
+
+  it('links bare www addresses with https', () => {
+    const html = renderCampaignHtml({ message: 'Visit www.auradeck.in.' })
+    expect(html).toContain('<a href="https://www.auradeck.in" style="color:#4f46e5;text-decoration:underline;">www.auradeck.in</a>.')
+  })
+
+  it('writes links as "text (url)" in the plain-text version', () => {
+    expect(renderCampaignText({ message: 'See [my LinkedIn](www.linkedin.com/in/me) now' })).toContain('See my LinkedIn (https://www.linkedin.com/in/me) now')
   })
 
   it('fills sample values for previews and test sends', () => {
     const out = withSampleValues(renderCampaignHtml({ message: 'hello' }))
-    expect(out).toContain('Hi Alex,')
     expect(out).not.toContain('{{{')
   })
 })
