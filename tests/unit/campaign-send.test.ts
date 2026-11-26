@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const db = vi.hoisted(() => ({
-  campaignSend: { update: vi.fn(), count: vi.fn(), create: vi.fn() },
+  campaignSend: { update: vi.fn(), count: vi.fn(), create: vi.fn(), findMany: vi.fn() },
   lead: { findMany: vi.fn() },
 }))
 const client = vi.hoisted(() => ({
   createSegment: vi.fn(), addContactsToSegment: vi.fn(), sendBroadcast: vi.fn(), sendTestEmail: vi.fn(),
+  deleteSegment: vi.fn(), broadcastStatus: vi.fn(),
 }))
 const guardedRoute = vi.hoisted(() => vi.fn())
 const env = vi.hoisted(() => ({ RESEND_API_KEY: 're_test' as string | undefined, NEXT_PUBLIC_APP_URL: 'https://crm.example.test' }))
@@ -20,7 +21,7 @@ vi.mock('@/lib/utils/api-helpers', async (orig) => ({
   guardedRoute,
 }))
 
-import { runCampaignSend, toSendDto } from '@/lib/services/campaigns'
+import { releaseFinishedSegments, runCampaignSend, toSendDto } from '@/lib/services/campaigns'
 import { POST } from '@/app/api/campaigns/send/route'
 
 const recipients = [{ email: 'a@x.com', firstName: 'A', lastName: 'B' }]
@@ -32,6 +33,7 @@ beforeEach(() => {
   db.campaignSend.update.mockResolvedValue({})
   client.createSegment.mockResolvedValue('seg1')
   client.sendBroadcast.mockResolvedValue('bc1')
+  db.campaignSend.findMany.mockResolvedValue([])
 })
 
 describe('runCampaignSend', () => {
@@ -56,6 +58,48 @@ describe('runCampaignSend', () => {
     expect(client.sendBroadcast).not.toHaveBeenCalled()
     expect(statuses()).toEqual(['syncing', 'failed'])
     expect(db.campaignSend.update.mock.calls.at(-1)![0].data.error).toBe('Resend 500: boom')
+  })
+})
+
+describe('releaseFinishedSegments', () => {
+  it('deletes segments of finished or never-sent broadcasts and keeps ones still sending', async () => {
+    db.campaignSend.findMany.mockResolvedValue([
+      { id: 'a', resendSegmentId: 'segA', resendBroadcastId: 'bcA' },
+      { id: 'b', resendSegmentId: 'segB', resendBroadcastId: 'bcB' },
+      { id: 'c', resendSegmentId: 'segC', resendBroadcastId: null },
+      { id: 'd', resendSegmentId: 'segD', resendBroadcastId: 'gone' },
+    ])
+    client.broadcastStatus.mockImplementation(async (id: string) => ({ bcA: 'sent', bcB: 'sending', gone: null })[id])
+    await releaseFinishedSegments()
+    expect(client.deleteSegment.mock.calls.map((c) => c[0])).toEqual(['segA', 'segC', 'segD'])
+    expect(db.campaignSend.update.mock.calls.map((c) => c[0].where.id)).toEqual(['a', 'c', 'd'])
+    expect(db.campaignSend.update.mock.calls[0][0].data).toEqual({ resendSegmentId: null })
+  })
+
+  it('only looks at sends that are not in flight', async () => {
+    await releaseFinishedSegments()
+    const where = db.campaignSend.findMany.mock.calls[0][0].where
+    expect(where.resendSegmentId).toEqual({ not: null })
+    expect(where.OR[0]).toEqual({ status: { notIn: ['queued', 'syncing', 'sending'] } })
+  })
+
+  it('keeps going when one delete fails', async () => {
+    db.campaignSend.findMany.mockResolvedValue([
+      { id: 'a', resendSegmentId: 'segA', resendBroadcastId: null },
+      { id: 'b', resendSegmentId: 'segB', resendBroadcastId: null },
+    ])
+    client.deleteSegment.mockRejectedValueOnce(new Error('Resend 500'))
+    await releaseFinishedSegments()
+    expect(client.deleteSegment).toHaveBeenCalledTimes(2)
+    expect(db.campaignSend.update.mock.calls.map((c) => c[0].where.id)).toEqual(['b'])
+  })
+
+  it('runs before a new segment is created', async () => {
+    const order: string[] = []
+    db.campaignSend.findMany.mockImplementation(async () => (order.push('cleanup'), []))
+    client.createSegment.mockImplementation(async () => (order.push('segment'), 'seg1'))
+    await runCampaignSend('s1', 'Hi', 'Body', recipients)
+    expect(order).toEqual(['cleanup', 'segment'])
   })
 })
 

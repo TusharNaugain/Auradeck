@@ -25,18 +25,20 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 
 let lastCallAt = 0
 
-/** POST JSON to Resend. Returns the parsed body, or null when the response status equals `tolerate`. */
-async function post(path: string, body?: unknown, tolerate?: number): Promise<{ id: string } | null> {
+type Method = 'GET' | 'POST' | 'DELETE'
+
+/** Calls Resend. Returns the parsed body, or null when the response status equals `tolerate`. */
+async function call<T = { id: string }>(method: Method, path: string, body?: unknown, tolerate?: number): Promise<T | null> {
   if (!env.RESEND_API_KEY) throw new EmailNotConfiguredError()
   for (let attempt = 0; ; attempt++) {
     await sleep(Math.max(0, lastCallAt + PACE_MS - Date.now()))
     lastCallAt = Date.now()
     const res = await fetch(`${env.RESEND_API_URL}${path}`, {
-      method: 'POST',
+      method,
       headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
     })
-    if (res.ok) return (await res.json()) as { id: string }
+    if (res.ok) return (await res.json()) as T
     if (res.status === tolerate) return null
     if (res.status === 429 && attempt < MAX_RETRIES) {
       await sleep((Number(res.headers.get('retry-after')) || 1) * 1000)
@@ -48,6 +50,7 @@ async function post(path: string, body?: unknown, tolerate?: number): Promise<{ 
   }
 }
 
+const post = (path: string, body?: unknown, tolerate?: number) => call('POST', path, body, tolerate)
 const required = async (path: string, body?: unknown) => (await post(path, body))!
 
 export async function createSegment(name: string): Promise<string> {
@@ -77,4 +80,18 @@ export async function sendBroadcast(b: { segmentId: string; name: string; subjec
 
 export async function sendTestEmail(to: string, subject: string, html: string, text: string): Promise<void> {
   await required('/emails', { from: from(), to: [to], subject, html, text })
+}
+
+/**
+ * Resend plans cap how many segments a team may keep (3 on the free plan), and every campaign
+ * makes one. Deleting a segment keeps its contacts (and their unsubscribe state); a missing one is fine.
+ */
+export async function deleteSegment(segmentId: string): Promise<void> {
+  await call('DELETE', `/segments/${encodeURIComponent(segmentId)}`, undefined, 404)
+}
+
+/** The broadcast's Resend status ("draft", "queued", "sending", "sent", ...), or null if it no longer exists. */
+export async function broadcastStatus(broadcastId: string): Promise<string | null> {
+  const b = await call<{ status?: string }>('GET', `/broadcasts/${encodeURIComponent(broadcastId)}`, undefined, 404)
+  return b ? b.status ?? 'unknown' : null
 }

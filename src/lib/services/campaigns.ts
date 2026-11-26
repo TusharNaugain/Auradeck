@@ -5,7 +5,9 @@ import { db } from '@/lib/db'
 import { logger } from '@/lib/utils/logger'
 import { DEAD_LEAD_STAGES } from '@/lib/services/leads'
 import { renderCampaignHtml, renderCampaignText } from '@/lib/email/campaign-template'
-import { addContactsToSegment, createSegment, sendBroadcast, type CampaignContact } from '@/lib/email/resend-broadcast'
+import {
+  addContactsToSegment, broadcastStatus, createSegment, deleteSegment, sendBroadcast, type CampaignContact,
+} from '@/lib/email/resend-broadcast'
 
 export type Audience = 'priority' | 'others' | 'all' | 'selected'
 
@@ -74,6 +76,35 @@ export function toSendDto({ updatedAt, ...row }: Prisma.CampaignSendGetPayload<{
 }
 
 /**
+ * Frees Resend segments left by earlier sends (the plan caps how many may exist). A segment is
+ * only deleted once its broadcast has finished sending, or when the send never got that far.
+ * Segments are team-wide in Resend, so this looks at every organisation's sends. Never throws.
+ */
+export async function releaseFinishedSegments(): Promise<void> {
+  const rows = await db.campaignSend.findMany({
+    where: {
+      resendSegmentId: { not: null },
+      OR: [{ status: { notIn: ACTIVE_STATUSES } }, { updatedAt: { lt: new Date(Date.now() - STALE_AFTER_MS) } }],
+    },
+    select: { id: true, resendSegmentId: true, resendBroadcastId: true },
+    orderBy: { createdAt: 'asc' },
+    take: 50,
+  })
+  for (const row of rows) {
+    try {
+      if (row.resendBroadcastId) {
+        const status = await broadcastStatus(row.resendBroadcastId)
+        if (status && status !== 'sent') continue
+      }
+      await deleteSegment(row.resendSegmentId!)
+      await db.campaignSend.update({ where: { id: row.id }, data: { resendSegmentId: null } })
+    } catch (err) {
+      logger.error('Could not release Resend segment', { id: row.id, error: err instanceof Error ? err.message : String(err) })
+    }
+  }
+}
+
+/**
  * Runs one send. Nothing is emailed until the final broadcast call, so any earlier failure leaves
  * Resend untouched. Never throws: every error ends as a failed row.
  */
@@ -81,6 +112,7 @@ export async function runCampaignSend(id: string, subject: string, message: stri
   const update = (data: Prisma.CampaignSendUpdateInput) => db.campaignSend.update({ where: { id }, data })
   try {
     await update({ status: 'syncing' })
+    await releaseFinishedSegments().catch((err) => logger.error('Segment cleanup failed', { error: String(err) }))
     const resendSegmentId = await createSegment(`CRM ${id}`)
     await update({ resendSegmentId })
     await addContactsToSegment(resendSegmentId, recipients)

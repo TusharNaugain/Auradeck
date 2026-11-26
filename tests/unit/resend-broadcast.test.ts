@@ -8,7 +8,7 @@ const env = vi.hoisted(() => ({
 }))
 vi.mock('@/env', () => ({ env }))
 
-import { addContactsToSegment, createSegment, EmailNotConfiguredError, sendBroadcast } from '@/lib/email/resend-broadcast'
+import { addContactsToSegment, broadcastStatus, createSegment, deleteSegment, EmailNotConfiguredError, sendBroadcast } from '@/lib/email/resend-broadcast'
 
 const json = (status: number, body: unknown = { id: 'id1' }, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(body), { status, headers })
@@ -82,5 +82,19 @@ describe('resend client', () => {
     expect(JSON.parse(calls()[0].init.body)).toMatchObject({
       segment_id: 's', from: 'Auradeck <hi@auradeck.in>', subject: 'Hi', send: true,
     })
+  })
+
+  it('deletes a segment and treats a missing one as done', async () => {
+    fetchMock.mockResolvedValueOnce(json(200, { deleted: true })).mockResolvedValueOnce(json(404, {}))
+    await run(deleteSegment('seg1'))
+    await run(deleteSegment('gone'))
+    expect(calls().map((c) => [c.init.method, c.url])).toEqual([['DELETE', '/segments/seg1'], ['DELETE', '/segments/gone']])
+  })
+
+  it('reads a broadcast status, or null when it does not exist', async () => {
+    fetchMock.mockResolvedValueOnce(json(200, { id: 'b1', status: 'sent' })).mockResolvedValueOnce(json(404, {}))
+    expect(await run(broadcastStatus('b1'))).toBe('sent')
+    expect(await run(broadcastStatus('nope'))).toBeNull()
+    expect(calls()[0].init.method).toBe('GET')
   })
 })
