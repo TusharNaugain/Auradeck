@@ -17,6 +17,15 @@ import {
 } from './common'
 import { normalizePhone, paginationSchema } from './common'
 import { LEAD_STAGES, normalizeStage } from '@/lib/leads/stages'
+import { DEMO_STATUSES, OUTCOMES, PAYMENT_STATUSES, WILLINGNESS_TO_PAY } from '@/lib/leads/profile'
+
+/** A date (YYYY-MM-DD) or full ISO date-time; null clears it. */
+const optionalDate = z
+  .string()
+  .trim()
+  .refine((v) => /^\d{4}-\d{2}-\d{2}/.test(v) && !Number.isNaN(Date.parse(v)), 'Enter a valid date')
+  .optional()
+  .nullable()
 
 /* ---------- Leads ---------- */
 
@@ -97,6 +106,23 @@ export const leadUpdateSchema = leadCreateObject.partial().extend({
   /** Add one extra contact (phone, social profile…). Source email/phone are never overwritten. */
   addExtraContact: extraContactInput.optional(),
   removeExtraContactId: z.string().trim().min(1).max(64).optional(),
+  // Therapist record (src/lib/leads/profile.ts)
+  signedUpAt: optionalDate,
+  demoStatus: z.enum(DEMO_STATUSES).optional().nullable(),
+  demoAt: optionalDate,
+  firstLoginAt: optionalDate,
+  firstClientAt: optionalDate,
+  firstSessionAt: optionalDate,
+  lastActiveAt: optionalDate,
+  trialStartAt: optionalDate,
+  trialEndsAt: optionalDate,
+  planOffered: safeTextOptional(100),
+  willingnessToPay: z.enum(WILLINGNESS_TO_PAY).optional().nullable(),
+  paymentStatus: z.enum(PAYMENT_STATUSES).optional().nullable(),
+  objections: longText().optional().nullable(),
+  featureRequests: longText().optional().nullable(),
+  outcome: z.enum(OUTCOMES).optional().nullable(),
+  lostReason: safeTextOptional(500),
 })
 export const leadListSchema = paginationSchema.extend({
   search: z.string().trim().max(200).optional(),

@@ -51,7 +51,8 @@ import { leadCreateSchema, leadSource, preferredContactMethod } from '@/lib/vali
 import { toast } from 'sonner'
 import { createGoogleCalendarLink } from '@/lib/client/calendar-link'
 import { LeadsTable, type SortKey } from './leads-table'
-import { ExtraContacts, LeadKeyFields, LeadLinkedRecords, LeadNameEditor, LeadStagePanel, SourceLockNote, StageGuide, stageColor, type ExtraContactView } from './lead-panels'
+import { ExtraContacts, LeadLinkedRecords, LeadNameEditor, LeadStagePanel, SourceLockNote, StageGuide, stageColor, type ExtraContactView } from './lead-panels'
+import { TherapistRecord } from './lead-profile'
 import {
   DEAD_LEAD_STAGES,
   LEAD_STAGES,
@@ -907,7 +908,7 @@ function LeadDetailsSheet({
             <div className="space-y-5 p-5">
               <LeadStagePanel stage={lead.lifecycleStage} canUpdate={canUpdate} onStageChange={onStageChange} />
 
-              <LeadKeyFields lead={lead} canUpdate={canUpdate} owner={<LeadOwner leadId={lead.id} owner={lead.assignedTo ?? null} />} />
+              <TherapistRecord lead={lead} canUpdate={canUpdate} owner={<LeadOwner leadId={lead.id} owner={lead.assignedTo ?? null} />} />
 
               <LeadLinkedRecords lead={lead} />
 
@@ -963,7 +964,6 @@ function LeadDetailsSheet({
                   {lead.consentStatus && <KeyValue label="Consent status" value={enumLabel(lead.consentStatus)} />}
                   {lead.consentSource && <KeyValue label="Consent source" value={lead.consentSource} />}
                 </div>
-                {lead.painPoints && <DetailText label="Pain points" value={lead.painPoints} />}
                 {lead.useCase && <DetailText label="Use case" value={lead.useCase} />}
                 {lead.customFields && Object.keys(lead.customFields).length > 0 && (
                   <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -1249,7 +1249,7 @@ function hasMoreDetails(lead: LeadDetails) {
   return Boolean(
     lead.preferredContactMethod || lead.sourceDetail || lead.qualificationStatus || lead.estimatedPracticeSize ||
     (lead.estimatedUsers !== undefined && lead.estimatedUsers !== null) || lead.currentSoftware || lead.budgetRange ||
-    lead.expectedTimeline || lead.consentStatus || lead.consentSource || lead.painPoints || lead.useCase ||
+    lead.expectedTimeline || lead.consentStatus || lead.consentSource || lead.useCase ||
     (lead.customFields && Object.keys(lead.customFields).length > 0)
   )
 }

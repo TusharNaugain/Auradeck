@@ -18,6 +18,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { DEAD_LEAD_STAGES, stageLabel } from '@/lib/leads/stages'
 import { applyStageFlow } from '@/lib/leads/stage-flow'
 import { addExtraContact, lockedSourceFields, parseExtraContacts, removeExtraContact } from '@/lib/leads/extra-contacts'
+import { PROFILE_DATE_FIELDS, PROFILE_TEXT_FIELDS, profileDefaultsForStage } from '@/lib/leads/profile'
 
 type RouteContext = { params: Promise<{ id: string }> }
 
@@ -125,6 +126,7 @@ export const PATCH = routeHandler(async (req: NextRequest, context: RouteContext
     select: {
       id: true, leadNumber: true, lifecycleStage: true, isPriority: true, assignedToUserId: true, assignedTeamId: true,
       firstName: true, lastName: true, email: true, phoneNumber: true, alternatePhone: true, whatsappNumber: true, extraContacts: true, firstContactedAt: true,
+      signedUpAt: true, trialStartAt: true, demoStatus: true, paymentStatus: true, outcome: true,
     },
   })
   if (!lead) throw new NotFoundError('Lead not found')
@@ -154,6 +156,20 @@ export const PATCH = routeHandler(async (req: NextRequest, context: RouteContext
   }
   if (body.assignedTeamId !== undefined && (body.assignedTeamId ?? null) !== lead.assignedTeamId) {
     assertCanAssign(ctx, { currentOwnerId: 'team', nextOwnerId: 'changed' })
+  }
+
+  // Therapist record fields; a stage move fills in what the team has not set yet.
+  const profile: Record<string, unknown> = {}
+  for (const key of PROFILE_DATE_FIELDS) if (body[key] !== undefined) profile[key] = body[key] ? new Date(body[key]!) : null
+  for (const key of PROFILE_TEXT_FIELDS) if (body[key] !== undefined) profile[key] = body[key] || null
+  for (const key of ['demoStatus', 'willingnessToPay', 'paymentStatus', 'outcome'] as const) {
+    if (body[key] !== undefined) profile[key] = body[key] ?? null
+  }
+  const nextStage = body.lifecycleStage?.toUpperCase()
+  if (nextStage && nextStage !== lead.lifecycleStage) {
+    for (const [key, value] of Object.entries(profileDefaultsForStage(nextStage, lead))) {
+      if (profile[key] === undefined) profile[key] = value
+    }
   }
 
   const before = {
@@ -201,6 +217,7 @@ export const PATCH = routeHandler(async (req: NextRequest, context: RouteContext
         // Leaving the New inbox = first outreach; record its date once.
         ...(body.lifecycleStage && body.lifecycleStage !== 'new' && !lead.firstContactedAt ? { firstContactedAt: new Date() } : {}),
         ...(body.isPriority !== undefined ? { isPriority: body.isPriority } : {}),
+        ...profile,
       },
     })
     let flowNotes: string[] = []
@@ -240,6 +257,7 @@ export const PATCH = routeHandler(async (req: NextRequest, context: RouteContext
       isPriority: updated.isPriority,
       ...(nameChanged ? { fullName: updated.fullName } : {}),
       ...(extraContacts ? { extraContacts: extraContacts.length } : {}),
+      ...(Object.keys(profile).length ? { profileFields: Object.keys(profile) } : {}),
       ...(updated.flowNotes.length ? { stageFlow: updated.flowNotes } : {}),
     },
     ipHash,

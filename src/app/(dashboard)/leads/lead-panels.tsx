@@ -42,7 +42,7 @@ async function patchLead(leadId: string, body: Record<string, unknown>) {
   await api.patch(`/api/leads/${leadId}`, body)
 }
 
-function useLeadSaver(leadId: string) {
+export function useLeadSaver(leadId: string) {
   const invalidate = useInvalidate()
   const [pending, setPending] = React.useState(false)
   const save = React.useCallback(async (body: Record<string, unknown>, success: string) => {

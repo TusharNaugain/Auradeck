@@ -728,6 +728,26 @@ model Lead {
   opportunityId           String?
   convertedContactId      String?
   lostReason              String?
+  // Therapist record (src/lib/leads/profile.ts)
+  signedUpAt              DateTime?
+  /// not_booked | scheduled | attended | no_show | cancelled
+  demoStatus              String?
+  demoAt                  DateTime?
+  firstLoginAt            DateTime?
+  firstClientAt           DateTime?
+  firstSessionAt          DateTime?
+  lastActiveAt            DateTime?
+  trialStartAt            DateTime?
+  trialEndsAt             DateTime?
+  planOffered             String?
+  /// high | medium | low | not_willing | unknown
+  willingnessToPay        String?
+  /// not_started | pending | paid | failed | refunded
+  paymentStatus           String?
+  objections              String?
+  featureRequests         String?
+  /// open | paid | dormant | lost
+  outcome                 String?
   disqualificationReason  String?
   consentStatus           String?
   consentSource           String?
@@ -753,6 +773,7 @@ model Lead {
   @@index([lifecycleStage])
   @@index([assignedToUserId])
   @@index([nextFollowUpAt])
+  @@index([trialEndsAt])
   @@index([createdAt])
   @@index([opportunityId])
   @@map("leads")

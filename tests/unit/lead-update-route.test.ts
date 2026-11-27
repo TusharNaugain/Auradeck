@@ -85,4 +85,33 @@ describe('PATCH /api/leads/[id]', () => {
     await patch({ nextAction: 'Call back' })
     expect(applyStageFlow).not.toHaveBeenCalled()
   })
+
+  it('saves therapist record fields: dates, choices and text, and clears with null', async () => {
+    const res = await patch({
+      signedUpAt: '2026-11-20', firstLoginAt: '2026-11-21T10:00:00.000Z', trialEndsAt: null,
+      demoStatus: 'no_show', willingnessToPay: 'medium', paymentStatus: 'pending', outcome: 'dormant',
+      planOffered: 'Solo', objections: 'Price', featureRequests: '', lostReason: 'Went quiet',
+    })
+    expect(res.status).toBe(200)
+    const data = updateData()
+    expect(data.signedUpAt).toEqual(new Date('2026-11-20'))
+    expect(data.firstLoginAt).toEqual(new Date('2026-11-21T10:00:00.000Z'))
+    expect(data).toMatchObject({
+      trialEndsAt: null, demoStatus: 'no_show', willingnessToPay: 'medium', paymentStatus: 'pending', outcome: 'dormant',
+      planOffered: 'Solo', objections: 'Price', featureRequests: null, lostReason: 'Went quiet',
+    })
+  })
+
+  it('rejects unknown choices and bad dates', async () => {
+    expect((await patch({ demoStatus: 'maybe' })).status).toBe(400)
+    expect((await patch({ trialEndsAt: 'next week' })).status).toBe(400)
+    expect(tx.lead.update).not.toHaveBeenCalled()
+  })
+
+  it('fills record fields from the stage move without overwriting what was sent', async () => {
+    await patch({ lifecycleStage: 'paid', paymentStatus: 'pending' })
+    expect(updateData()).toMatchObject({ lifecycleStage: 'PAID', outcome: 'paid', paymentStatus: 'pending' })
+    expect(updateData().signedUpAt).toBeInstanceOf(Date)
+  })
 })
+
